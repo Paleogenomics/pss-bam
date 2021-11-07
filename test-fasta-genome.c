@@ -5,8 +5,6 @@
 #include <getopt.h>
 #include "fasta-genome-io.h"
 
-#define DEBUG (1)
-
 void help( void ) {
   printf( "test-fasta-genome -f <fasta file> -I <ID of sequence to find>\n" );
   printf( "This program uses the fasta-genome-io code to parse an input\n" );
@@ -41,19 +39,10 @@ int main( int argc, char* argv[] ) {
     help();
   }
 
-  genome = init_genome();
-  fa_src = init_fasta_src( fa_in );
-
-  seq = get_next_fa( fa_src, genome );
-  while( seq != NULL ) {
-    if ( DEBUG ) {
-      printf( "Saw %s length %lu\n", seq->id, seq->len );
-    }
-    seq = get_next_fa( fa_src, genome );
-  }
-  close_fasta_src( fa_src );
-  qsort( genome->seqs, genome->n_seqs, sizeof(Seq*), chr_cmp );
+  genome = init_genome(fa_in);
   
+  printf( "Parsed input genome. Found %lu sequences.\n",
+	  genome->n_seqs );
   seq = find_seq( genome, target_id );
   if ( seq == NULL ) {
     printf( "Could not find %s in genome.\n",

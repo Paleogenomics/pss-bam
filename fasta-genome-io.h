@@ -32,7 +32,7 @@ typedef struct fa_src {
 } Fa_Src;
 
 /* Function prototypes */
-Genome* init_genome( void );
+Genome* init_genome( const char fn[] );
 Fa_Src* init_fasta_src( const char fn[] );
 Seq* get_next_fa( Fa_Src* fa_source, Genome* genome );
 int read_fasta( FILE* fp, Seq* seq, char* seq_buffer );

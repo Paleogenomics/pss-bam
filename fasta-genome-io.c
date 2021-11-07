@@ -215,12 +215,22 @@ int chr_cmp( const void *v1, const void *v2 ) {
   return strcmp( (*c1p)->id, (*c2p)->id );
 }
 
-Genome* init_genome( void ) {
+Genome* init_genome( const char fn[] ) {
   Genome* genome;
+  Fa_Src* fa_src;
+  Seq* seq;
   genome = (Genome*)malloc(sizeof( Genome ));
   genome->seqs = (Seq**)malloc(sizeof(Seq*)*MAX_GENOME_SEQS);
   genome->dummy = (Seq*)malloc(sizeof(Seq));
   genome->n_seqs = 0;
+
+  fa_src = init_fasta_src(fn);
+  seq = get_next_fa( fa_src, genome );
+  while( seq != NULL ) {
+    seq = get_next_fa( fa_src, genome );
+  }
+  close_fasta_src( fa_src );
+  qsort( genome->seqs, genome->n_seqs, sizeof(Seq*), chr_cmp );
   return genome;
 }
 
