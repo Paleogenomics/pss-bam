@@ -35,7 +35,7 @@ int line2saml( const char* line, Saml* sp ) {
   int got_XG = 0;
   char value[ MAX_FIELD_WIDTH ];
   if ( sscanf( line,
-	       "%s\t%u\t%s\t%u\t%u\t%s\t%s\t%u\t%i\t%s\t%s\t%s",
+	       "%s\t%u\t%s\t%lu\t%u\t%s\t%s\t%u\t%i\t%s\t%s\t%s",
 	       sp->qname,
 	       &sp->flag,
 	       sp->rname,
@@ -48,16 +48,25 @@ int line2saml( const char* line, Saml* sp ) {
 	       sp->seq,
 	       sp->qual,
 	       sp->tags ) >= 11 ) {
-    if ( strlen( sp->seq ) == strlen( sp->qual ) ) {
 
+    if ( strlen( sp->seq ) == strlen( sp->qual ) ) {
       sp->seq_len = strlen( sp->seq );
-      
-      /* Check if this sequence is not from a pair. If not, then
-	 its length IS the isize. The relevant field for "of a pair"
-         is the first bit of the flag. 
-	 Therfore, odd => paired, even => not paired */
-      if ( sp->flag % 2 == 0 ) {
-	sp->isize = strlen( sp->seq );
+
+      sp->read_paired = sp->flag & (1 << 0);
+      sp->pair_properly_aligned = sp->flag & (1 << 1);
+      sp->read_unmapped = sp->flag & (1 << 2);
+      sp->mate_unmapped = sp->flag & (1 << 3);
+      sp->read_reverse = sp->flag & (1 << 4);
+      sp->mate_reverse = sp->flag & (1 << 5);
+      sp->first_in_pair = sp->flag & (1 << 6);
+      sp->second_in_pair = sp->flag & (1 << 7);
+      sp->not_primary = sp->flag & (1 << 8);
+      sp->not_passing_filters = sp->flag & (1 << 9);
+      sp->is_duplicate = sp->flag & (1 << 10);
+      sp->supplementary_alignment = sp->flag & (1 << 11);
+
+      if ( sp->read_paired == 0 ) {
+        sp->isize = strlen( sp->seq );
       }
       
       len = strlen( line );
@@ -66,63 +75,54 @@ int line2saml( const char* line, Saml* sp ) {
 	 This is either the end of the line or the beginning
 	 of the optional field */
       while( field < 11 ) {
-	if ( line[pos] == '\t' ) {
-	  field++;
-	}
-	pos++;
+        if ( line[pos] == '\t' ) {
+          field++;
+        }
+        pos++;
       }
 
       /* Note, I don't try to get all the tags - just the ones
 	 I currently care about. */
       while( pos < len ) {
-	sscanf( &line[pos], "%2s:%c:%s", tag, &type, value );
-	if( strcmp( tag, "BC" ) == 0 ) {
-	  strcpy( sp->BC, value );
-	}
-	if ( strcmp( tag, "AS" ) == 0 ) {
-	  sp->AS = atoi( value );
-	  got_AS = 1;
-	}
-	if ( strcmp( tag, "NM" ) == 0 ) {
-	  sp->NM = atoi( value );
-	}
-	if ( strcmp( tag, "RG" ) == 0 ) {
-	  strcpy( sp->RG, value );
-	}
-	if ( strcmp( tag, "XM" ) == 0 ) { // mismatches
-	  sp->XM = atoi( value );
-	  got_XM = 1;
-	}
-	if ( strcmp( tag, "XO" ) == 0 ) { // gap opens
-	  sp->XO = atoi( value );
-	  got_XO = 1;
-	}
-	if ( strcmp( tag, "XG" ) == 0 ) { // gap extends
-	  sp->XG = atoi( value );
-	  got_XG = 1;
-	}
+        sscanf( &line[pos], "%2s:%c:%s", tag, &type, value );
+
+        if( strcmp( tag, "BC" ) == 0 ) {
+          strcpy( sp->BC, value );
+        }
+        if ( strcmp( tag, "AS" ) == 0 ) {
+          sp->AS = atoi( value );
+          got_AS = 1;
+        }
+        if ( strcmp( tag, "NM" ) == 0 ) {
+          sp->NM = atoi( value );
+        }
+        if ( strcmp( tag, "RG" ) == 0 ) {
+          strcpy( sp->RG, value );
+        }
+        if ( strcmp( tag, "XM" ) == 0 ) { // mismatches
+          sp->XM = atoi( value );
+          got_XM = 1;
+        }
+        if ( strcmp( tag, "XO" ) == 0 ) { // gap opens
+          sp->XO = atoi( value );
+          got_XO = 1;
+        }
+        if ( strcmp( tag, "XG" ) == 0 ) { // gap extends
+          sp->XG = atoi( value );
+          got_XG = 1;
+        }
 	
-	/* Push pos up to the next TAG or end of line */
-	while( (line[pos] != '\t') &&
-	       (pos < len) ) {
-	  pos++;
-	}
-	pos++;
+	      /* Push pos up to the next TAG or end of line */
+	      while( (line[pos] != '\t') && (pos < len) ) {
+          pos++;
+        }
+	      pos++;
       }
-      if ( got_AS ) {
-	return 0;
-      }
-      if ( got_XM && got_XO && got_XG ) {
-	sp->AS =
-	  ((aln_seq_len( sp->cigar ) - sp->XM) * MATCH)
-	  - (sp->XM * MISMATCH)
-	  - (sp->XO * GAP_OPEN)
-	  - (sp->XG * GAP_EXT);
-	return 0;
-      }
+      return 0;
     }
     return 1;
   }
+  return 1;
 }
 
 /* Takes CIGAR string and returns the number of

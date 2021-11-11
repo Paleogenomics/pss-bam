@@ -8,7 +8,6 @@
 #define MAX_LINE_LEN (200000)
 #define MAX_FN_LEN (2047)
 #define MAX_FIELD_WIDTH (2047)
-#define MAX_ID_LEN (512)
 #define MATCH (1)
 #define MISMATCH (4)
 #define GAP_OPEN (6)
@@ -21,8 +20,20 @@
 typedef struct saml {
   char qname[MAX_FIELD_WIDTH + 1];
   unsigned int flag;
+  unsigned int read_paired : 1;
+  unsigned int pair_properly_aligned : 1;
+  unsigned int read_unmapped : 1;
+  unsigned int mate_unmapped : 1;
+  unsigned int read_reverse : 1;
+  unsigned int mate_reverse : 1;
+  unsigned int first_in_pair : 1;
+  unsigned int second_in_pair : 1;
+  unsigned int not_primary : 1;
+  unsigned int not_passing_filters : 1;
+  unsigned int is_duplicate : 1;
+  unsigned int supplementary_alignment : 1;
   char rname[ MAX_FIELD_WIDTH + 1];
-  unsigned int pos;
+  unsigned long pos;
   unsigned int mapq;
   char cigar[MAX_FIELD_WIDTH + 1];
   char mrnm[MAX_FIELD_WIDTH + 1];
