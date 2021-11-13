@@ -111,9 +111,8 @@ int line2saml( const char* line, Saml* sp ) {
           sp->XG = atoi( value );
           got_XG = 1;
         }
-	
-	      /* Push pos up to the next TAG or end of line */
-	      while( (line[pos] != '\t') && (pos < len) ) {
+        /* Push pos up to the next TAG or end of line */
+        while( (line[pos] != '\t') && (pos < len) ) {
           pos++;
         }
 	      pos++;
