@@ -85,10 +85,13 @@ Seq* get_next_fa( Fa_Src* fa_source, Genome* genome ) {
 int close_fasta_src( Fa_Src* fa_source ) {
   if ( fa_source->is_gz ) {
     gzclose( fa_source->fagz );
+    
   }
   else {
     fclose(fa_source->fafp);
   }
+  free(fa_source->seq_buffer);
+  free(fa_source);
   return 0;
 }
 
@@ -232,6 +235,29 @@ Genome* init_genome( const char fn[] ) {
   close_fasta_src( fa_src );
   qsort( genome->seqs, genome->n_seqs, sizeof(Seq*), chr_cmp );
   return genome;
+}
+
+
+int destroy_seq(Seq* seq) {
+  if (!seq) {
+    return 0;
+  }
+  free(seq->seq);
+  free(seq);
+  return 0;
+}
+
+int destroy_genome(Genome* genome) {
+  if (!genome) {
+    return 0;
+  }
+  for (int i = 0; i < genome->n_seqs; i++) {
+    destroy_seq(genome->seqs[i]);
+  }
+  free(genome->seqs);
+  free(genome->dummy);
+  free(genome);
+  return 0;
 }
 
 /** fileOpen **/

@@ -42,3 +42,5 @@ int is_gz( const char* fn );
 FILE* fileOpen( const char* name, char access_mode[] );
 int close_fasta_src( Fa_Src* );
 int chr_cmp( const void *v1, const void *v2 );
+int destroy_seq(Seq* seq);
+int destroy_genome(Genome* genome);
