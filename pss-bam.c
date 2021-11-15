@@ -9,28 +9,31 @@
 #define TRUE 1
 #define FALSE 0
 
-static unsigned int REGION_LEN = 15;
-static unsigned int MIN_READ_LEN = 0;
+static int REGION_LEN = 15;
+static unsigned long MIN_READ_LEN = 0;
 static unsigned long MAX_READ_LEN = 250000000;
-static unsigned int MIN_MQ = 0;
-static char UPSTR_BASE_CNTXT[5] = "ACTG";
-static char DWNSTR_BASE_CNTXT[5] = "ACTG";
+static int MIN_MQ = 0;
+static char* UPSTR_BASE_CNTXT = "ACTG";
+static char* DWNSTR_BASE_CNTXT = "ACTG";
 static int MERGED_ONLY = 0;
 
 
+/* Initialize the forward and reverse count matrices with 0 in all cells */
 unsigned long** init_count_table() {
-    /* extra 2 bases upstream/downstream of aln start */
+    //extra 2 bases upstream/downstream of aln start */
     unsigned long** count_tab = malloc((REGION_LEN+2) * sizeof(unsigned long*));
     for (int i = 0; i < REGION_LEN+2; i++) {
         unsigned long* count_arr = malloc(16 * sizeof(unsigned long)); //16 total base substitutions
         for (int j = 0; j < 16; j++) {
-             count_arr[j] = 0;
+            count_arr[j] = (unsigned long)0;
         }
         count_tab[i] = count_arr;
     }
     return count_tab;
 }
 
+
+/* Return the reverse complement of the input sequence */
 char* do_reverse_complement(const char* seq) {
     unsigned long seq_len = strlen(seq);
     char* rev_comp = malloc(seq_len * sizeof(char)); //remember to free
@@ -56,6 +59,7 @@ char* do_reverse_complement(const char* seq) {
     return rev_comp;
 }
 
+/* Check if read length is between values specified by -l and -L */
 int read_len_ok(int seq_len) {
     if ( (seq_len >= MIN_READ_LEN) && (seq_len <= MAX_READ_LEN) ) {
         return 1;
@@ -63,7 +67,7 @@ int read_len_ok(int seq_len) {
     return 0;
 }
 
-
+/* Check if CIGAR string only contains a number and an M */
 int cigar_ok(const char* cigar) {
     regex_t regex;
     const char* pattern = "^[0-9]+[M]$"; //only a number and an M
@@ -99,7 +103,22 @@ int context_base_ok(char fb_upstr, char sb_upstr, \
     return 0;
 }
 
-int context_count(unsigned long** count_table, const char fcb, const char scb) {
+
+/* Call samtools view to convert bam to sam */
+FILE* bam_to_sam(const char* bam_fn) {
+    char cmd_buf[512];
+    sprintf(cmd_buf, "samtools view %s", bam_fn);
+    FILE* sam_out = popen(cmd_buf, "r"); //get file pointer to sam stdout
+    if (sam_out == NULL) {
+        fprintf(stderr, "Error: Unable to open %s with samtools view.\n", bam_fn);
+        exit(1);
+    }
+    return sam_out;
+}
+
+
+/* Count the 2 context bases upstream/downstream of aln */
+void context_count(unsigned long** count_table, const char fcb, const char scb) {
     char context_bases[3] = {scb, fcb}; //second context base is 1st row
     for (int i = 0; i < 2; i++) {
         switch (context_bases[i]) {
@@ -116,17 +135,18 @@ int context_count(unsigned long** count_table, const char fcb, const char scb) {
                 count_table[i][15] += 1;
                 break;
             default:
-                return 0;
+                continue;
         }
     }
-    return 0;
 }
 
-int fwd_substitution_count(unsigned long** fwd_counts, const char* ref_seq, \
+
+/* Count base substitutions in the interior of aln in the forward direction */
+void fwd_substitution_count(unsigned long** fwd_counts, const char* ref_seq, \
                             const char* read_seq, unsigned long aln_start) {
     for (int i = 0; i < REGION_LEN; i++) {
         char pair_bases[3] = {read_seq[i], ref_seq[aln_start+i]};
-        
+
         if (strcmp(pair_bases, "AA") == 0) {
             fwd_counts[i+2][0] += 1;
         }
@@ -179,10 +199,10 @@ int fwd_substitution_count(unsigned long** fwd_counts, const char* ref_seq, \
             continue;
         }
     }
-    return 0;
 }
 
-int rev_substitution_count(unsigned long** rev_counts, const char* ref_seq, \
+/* Count base substitutions in the interior of aln in the reverse direction */
+void rev_substitution_count(unsigned long** rev_counts, const char* ref_seq, \
                             const char* read_seq, int seq_len, unsigned long aln_end) {
     for (int i = 0; i < REGION_LEN; i++) {
         char pair_bases[3] = {read_seq[seq_len-(i+1)], ref_seq[aln_end-i]};
@@ -239,94 +259,207 @@ int rev_substitution_count(unsigned long** rev_counts, const char* ref_seq, \
             continue;
         }
     }
-    return 0;
 }
 
 
-int fill_count_table(const char* fasta_fn, const char* bam_fn) {
+/* Add counts to output tables from a single aln entry */
+void process_aln(unsigned long** fwd_counts, unsigned long** rev_counts, \
+                Genome* genome, Saml* sp) {
+    
+    Seq* rseq = find_seq(genome, sp->rname);
+    char* ref_seq = rseq->seq;
+
+    unsigned long aln_start = (sp->pos)-1; //pos in sam file is 1-based
+    unsigned long aln_end = aln_start+(sp->seq_len)-1;
+
+    if ( (sp->mapq >= MIN_MQ) 
+        && (read_len_ok(sp->seq_len))
+        && (cigar_ok(sp->cigar)) 
+        && (sp->read_paired == FALSE)  
+        && (sp->read_unmapped == FALSE) 
+        && (sp->not_primary == FALSE) 
+        && (sp->not_passing_filters == FALSE)
+        && (sp->is_duplicate == FALSE) 
+        && (sp->supplementary_alignment == FALSE) ) {
+        
+        if (sp->read_reverse == TRUE) {
+            char* rev_ref = do_reverse_complement(ref_seq);
+            char rfb_upstr = rev_ref[aln_start-1]; //reverse 1st base upstream
+            char rsb_upstr = rev_ref[aln_start-2]; //reverse 2nd base upstream
+            char rfb_dwnstr = rev_ref[aln_end+1];  //downstream
+            char rsb_dwnstr = rev_ref[aln_end+2];
+
+            if (context_base_ok(rfb_upstr, rsb_upstr, rfb_dwnstr, rsb_dwnstr)) {
+                context_count(fwd_counts, rfb_upstr, rsb_upstr); //count upstream context bases
+                context_count(rev_counts, rfb_dwnstr, rsb_dwnstr); //count downstream context bases
+                char* rev_read = do_reverse_complement(sp->seq);
+                fwd_substitution_count(fwd_counts, rev_ref, rev_read, aln_start);
+                rev_substitution_count(rev_counts, rev_ref, rev_read, sp->seq_len, aln_end);
+
+            }
+            free(rev_ref);
+            free(rev_ref);
+        }
+            
+        else {
+            char fb_upstr = ref_seq[aln_start-1];
+            char sb_upstr = ref_seq[aln_start-2];
+            char fb_dwnstr = ref_seq[aln_end+1];
+            char sb_dwnstr = ref_seq[aln_end+2];
+
+            if (context_base_ok(fb_upstr, sb_upstr, fb_dwnstr, sb_dwnstr)) {
+                context_count(fwd_counts, fb_upstr, sb_upstr);
+                context_count(rev_counts, fb_dwnstr, sb_dwnstr);
+                fwd_substitution_count(fwd_counts, ref_seq, sp->seq, aln_start);
+                rev_substitution_count(rev_counts, ref_seq, sp->seq, sp->seq_len, aln_end);
+            }
+        }
+    }
+
+    else {
+        printf("Read %s did not pass filters\n", sp->qname);
+    }
+}
+
+/* Print output to stdout */
+void print_output(const char* fasta_fn, const char* bam_fn, \
+                unsigned long** fwd_counts, unsigned long** rev_counts) {
+    printf("### pss-bam.c v1\n### %s\n### %s\n", fasta_fn, bam_fn);
+    puts("### Format of table:");
+    puts("### Counts of how often a read base and genome base were seen at");
+    puts("### each position in the aligned reads.");
+    puts("### First base is what was seen in the read.");
+    puts("### Second base is what was in the genome at that position.");
+    puts("### POS AA AC AG AT CA CC CG CT GA GC GG GT TA TC TG TT");
+    puts("### Forward read substitution counts and base context");
+
+    for (int i = -2; i < REGION_LEN; i++) {
+        printf("%d\t", i);
+        for (int j = 0; j < 16; j++) {
+            printf("%lu\t", fwd_counts[i+2][j]);
+        }
+        printf("\n");
+    }
+    puts("\n\n### Reverse read substitution counts and base context");
+    
+    //for rev_counts, print rows in backward order
+    for (int i = REGION_LEN-1; i >= 0; i--) {
+        printf("%d\t", i);
+        for (int j = 0; j < 16; j++) {
+            printf("%lu\t", rev_counts[(REGION_LEN+1)-i][j]);
+        }
+        printf("\n");
+    }
+    
+    //print dowmstream context rows
+    for (int i = 0; i < 2; i++) {
+        printf("%d\t", i+1);
+        for (int j = 0; j < 16; j++) {
+            printf("%lu\t", rev_counts[REGION_LEN+i][j]);
+        }
+        printf("\n");
+    }
+}
+
+/* Go through every alignment entry in bam file to populate forward and reverse count tables */
+void fill_count_tables(const char* fasta_fn, const char* bam_fn) {
     Genome* genome = init_genome(fasta_fn);
     unsigned long** fwd_counts = init_count_table();
     unsigned long** rev_counts = init_count_table();
 
-    char cmd_buf[512];
-    sprintf(cmd_buf, "samtools view %s", bam_fn);
-    FILE* bp = popen(cmd_buf, "r"); //get file pointer to sam stdout
-    if (bp == NULL) {
-        fprintf(stderr, "Error: Unable to open %s with samtools view.\n", bam_fn);
-        exit(1);
-    }
 
+    FILE* sam_out = bam_to_sam(bam_fn);
     char saml_buf[MAX_LINE_LEN+1];
     Saml* sp = malloc(sizeof(Saml*));
 
-    while (fgets(saml_buf, MAX_LINE_LEN+1, bp)) {
+    while (fgets(saml_buf, MAX_LINE_LEN+1, sam_out)) {
         int status = line2saml(saml_buf, sp);
         if (status) {
             fprintf(stderr, "Problem parsing alignment entry, continuing to next entry...\n");
             continue;
         }
-
-        Seq* rseq = find_seq(genome, sp->rname);
-        char* ref_seq = rseq->seq;
-
-        unsigned long aln_start = (sp->pos)-1; //pos in sam file is 1-based
-        unsigned long aln_end = aln_start+(sp->seq_len)-1;
-
-        if ( (sp->mapq >= MIN_MQ) 
-            && (read_len_ok(sp->seq_len))
-            //&& (cigar_ok(sp->cigar)) 
-            && (sp->read_paired == FALSE)  
-            && (sp->read_unmapped == FALSE) 
-            && (sp->not_primary == FALSE) 
-            && (sp->not_passing_filters == FALSE)
-            && (sp->is_duplicate == FALSE) 
-            && (sp->supplementary_alignment == FALSE) ) {
-
-                if (sp->read_reverse == TRUE) {
-                    char* rev_ref = do_reverse_complement(ref_seq);
-                    char rfb_upstr = rev_ref[aln_start-1]; //reverse 1st base upstream
-                    char rsb_upstr = rev_ref[aln_start-2]; //reverse 2nd base upstream
-                    char rfb_dwnstr = rev_ref[aln_end+1];  //downstream
-                    char rsb_dwnstr = rev_ref[aln_end+2];
-
-                    if (context_base_ok(rfb_upstr, rsb_upstr, rfb_dwnstr, rsb_dwnstr)) {
-                        int fc_count = context_count(fwd_counts, rfb_upstr, rsb_upstr); //count upstream context bases
-                        int rc_count = context_count(rev_counts, rfb_dwnstr, rsb_dwnstr); //count downstream context bases
-                        char* rev_read = do_reverse_complement(sp->seq);
-                        int fs_count = fwd_substitution_count(fwd_counts, rev_ref, rev_read, aln_start);
-                        int rs_count = rev_substitution_count(rev_counts, rev_ref, rev_read, sp->seq_len, aln_end);
-                    }
-                }
-
-                char fb_upstr = ref_seq[aln_start-1];
-                char sb_upstr = ref_seq[aln_start-2];
-                char fb_dwnstr = ref_seq[aln_end+1];
-                char sb_dwnstr = ref_seq[aln_end+2];
-
-                if (context_base_ok(fb_upstr, sb_upstr, fb_dwnstr, sb_dwnstr)) {
-                        int fc_count = context_count(fwd_counts, fb_upstr, sb_upstr);
-                        int rc_count = context_count(rev_counts, fb_dwnstr, sb_dwnstr);
-                        int fs_count = fwd_substitution_count(fwd_counts, ref_seq, sp->seq, aln_start);
-                        int rs_count = rev_substitution_count(rev_counts, ref_seq, sp->seq, sp->seq_len, aln_end);
-                }
-        }
-        else {
-            printf("Read %s did not pass filters\n", sp->qname);
-        }
+        process_aln(fwd_counts, rev_counts, genome, sp);
     }
-    printf("Forward tab:\n");
-    for (int i = 0; i < REGION_LEN+2; i++) {
-        for (int j = 0; j < 16; j++) {
-            printf("%lu\t", fwd_counts[i][j]);
-        }
-        printf("\n");
-    }
-    
-    return 0;
+
+    print_output(fasta_fn, bam_fn, fwd_counts, rev_counts);
+    free(sp);
 }
 
-int main() {
-    int a = fill_count_table("test.fa", "test.bam");
+
+
+/*** MAIN PROGRAM ***/
+int main(int argc, char* argv[]) {
+    int option;
+    char* opts = ":F:B:r:l:L:q:U:D";
+    char* fasta_fn, *bam_fn, *ptr1, *ptr2;
+    while ((option = getopt(argc, argv, opts)) != -1) {
+        switch (option) {
+            case 'F':
+                fasta_fn = strdup(optarg);
+                break;
+            case 'B':
+                bam_fn = strdup(optarg);
+                break;
+            case 'r':
+                REGION_LEN = atoi(optarg);
+                break;
+            case 'l':
+                MIN_READ_LEN = strtoul(optarg, &ptr1, 10);
+                break;
+            case 'L':
+                MAX_READ_LEN = strtoul(optarg, &ptr2, 10);
+                break;
+            case 'q':
+                MIN_MQ = atoi(optarg);
+                break;
+            case 'U':
+                UPSTR_BASE_CNTXT = optarg;
+                break;
+            case 'D':
+                DWNSTR_BASE_CNTXT = optarg;
+                break;
+            case ':':
+                fprintf(stderr, "Please enter required argument for option -%c.\n", optopt);
+                exit(0);
+            case '?':
+                if (isprint(optopt)) {
+                    fprintf(stderr, "Unknown option -%c.\n", optopt);
+                }
+                else {
+                    fprintf (stderr, "Unknown option character \\x%x.\n", optopt);
+                }
+                break;
+            default:
+                fprintf(stderr, "Error parsing command-line options.\n");
+                exit(0);
+        }
+    }
+    for (int i = optind; i < argc; i++) {
+            printf("Non-option argument %s\n", argv[i]);
+    }
+    if (!fasta_fn || !bam_fn) {
+        fprintf(stderr, "pss-bam: Program for describing base context and counting\n");
+        fprintf(stderr, "the number of matches/mismatches in aligned reads to a genome.\n" );
+        fprintf(stderr, "-F <reference FASTA>\n");
+        fprintf(stderr, "-B <input BAM>\n");
+	    fprintf(stderr, "-r <length in basepairs into the interior of alignments to report on (default: 15)>\n");
+        fprintf(stderr, "-l <minimum length of read to report (default: 0)>\n");
+        fprintf(stderr, "-L <maximum length of read to report (default: 250000000)>\n");
+	    fprintf(stderr, "-q <map quality filter of read to report (default: 0)>\n" );
+	    fprintf(stderr, "-U <upstream context base filter; first base before alignment must be one of these (default: ACGT)>\n");
+	    fprintf(stderr, "-D <downstream context base filter; first base before alignment must be one of these (default: ACGT)>\n");
+        exit(1);
+    }
+    if (!fasta_fn) {
+        fprintf(stderr, "Please specify reference fasta file via the -F option.\n");
+        exit(0);
+    }
+    if (!bam_fn) {
+        fprintf(stderr, "Please specify input bam file via the -B option.\n");
+        exit(0);
+    } 
+    fill_count_tables(fasta_fn, bam_fn);
     return 0;
+    //free memory
 }
 
