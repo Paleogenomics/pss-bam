@@ -33,7 +33,16 @@ unsigned long** init_count_mtrx() {
 }
 
 
-/* Return the reverse complement of the input sequence */
+/* Return the reverse complement of the input sequence
+   EG NOTE: This works only if sequence is all upper-case
+   You may want to add cases at the end for lower-case
+   sequence characters.
+   EG NOTE2: A better design may be to add a field to 
+   sam-parse.h called char revcom_seq[MAX_FIELD_WIDTH +1]
+   Then, just put the reverse complement sequence in that.
+   In this way, you don't have to do a gazillion memory
+   allocations (which are slow).
+ */
 char* do_reverse_complement(const char* seq) {
     unsigned long seq_len = strlen(seq);
     char* rev_comp = malloc(seq_len * sizeof(char)); //remember to free
@@ -60,7 +69,9 @@ char* do_reverse_complement(const char* seq) {
 }
 
 
-/* Check if read length is between values specified by -l and -L */
+/* Check if read length is between values specified by -l and -L
+   EG NOTE: input argument int seq_len should be const int seq_len
+ */
 int read_len_ok(int seq_len) {
     if ( (seq_len >= MIN_READ_LEN) && (seq_len <= MAX_READ_LEN) ) {
         return 1;
@@ -69,7 +80,14 @@ int read_len_ok(int seq_len) {
 }
 
 
-/* Check if CIGAR string only contains a number and an M */
+/* Check if CIGAR string only contains a number and an M
+   EG NOTE: Using the regular expression engine here is probably overkill and
+   slow. I think a simpler approach might be better.
+   For example, if you pass this function the length of the sequence as text
+   ("73" for example), then the CIGAR string *must* be exactly this string:
+   "73M". In that way, you could do a simple strcmp() to determine if it has
+   the appropriate CIGAR string
+ */
 int cigar_ok(const char* cigar) {
     regex_t regex;
     const char* pattern = "^[0-9]+[M]$"; //only a number and an M
@@ -89,7 +107,19 @@ int cigar_ok(const char* cigar) {
 
 
 /* Check if 1st base upstream/downstream of aln is specified in -U/-D;
-    also check if 2 extra bases are present upstream/downstream of aln */
+    also check if 2 extra bases are present upstream/downstream of aln
+    EG NOTE: I think there is a bug here. If I understand what you're doing, 
+    you're checked to see if there is a NULL character in the first or second
+    position upstream or downstream. If the alignment is at the very beginning
+    or end of a chromosome, the characters just outside of that might *NOT*
+    be NULL characters! There's no telling what's in those memory positions.
+    A better approach would be to check the genome coordinates of those 
+    positions. They cannot by less than 0 (for 0-indexed coordinates) 
+    or greater than seq->len. In fact, you should check this *before* you
+    fetch these characters from the genome. Otherwise, you're pulling in
+    data from an unallocated memory region. This is *probably* where your
+    segfault is coming from!
+ */
 int context_base_ok(const char fb_upstr, const char sb_upstr, \
                     const char fb_dwnstr, const char sb_dwnstr) {
     if ( (fb_upstr == '\0')
@@ -378,7 +408,10 @@ int destroy_count_mtrx(unsigned long** count_mtrx) {
 }
 
 
-/* Go through every alignment in bam file to populate count matrices */
+/* Go through every alignment in bam file to populate count matrices
+   EG NOTE: I would have this in main(). This is the main control loop
+   of the program.
+*/
 void do_count(const char* fasta_fn, const char* bam_fn) {
     Genome* genome = init_genome(fasta_fn);
     unsigned long** fwd_counts = init_count_mtrx();
