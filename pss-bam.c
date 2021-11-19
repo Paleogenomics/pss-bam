@@ -2,7 +2,6 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
-#include <regex.h>
 
 #include "fasta-genome-io.h"
 #include "sam-parse.h"
@@ -36,22 +35,22 @@ unsigned long** init_count_mtrx() {
 
 /* Return the reverse complement of the input sequence */
 void do_reverse_complement(const char* seq, char* rev_buf, size_t seq_len) {
-    for (size_t i = 0; i < seq_len; i++) {
+    for (size_t i = seq_len-1; i >= 0; i--) {
         char base = seq[i];
         if ( (base == 'A') || (base == 'a') ) {
-            rev_buf[i] = 'T';
+            rev_buf[seq_len-(i+1)] = 'T';
         }
         else if ( (base == 'C') || (base == 'c') ) {
-            rev_buf[i] = 'G';
+            rev_buf[seq_len-(i+1)] = 'G';
         }
         else if ( (base == 'G') || (base == 'g') ) {
-            rev_buf[i] = 'C';
+            rev_buf[seq_len-(i+1)] = 'C';
         }
         else if ( (base == 'T') || (base == 't') ) {
-            rev_buf[i] = 'A';
+            rev_buf[seq_len-(i+1)] = 'A';
         }
         else {
-            rev_buf[i] = base;
+            rev_buf[seq_len-(i+1)] = base;
         }
     }
 }
