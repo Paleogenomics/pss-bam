@@ -41,6 +41,7 @@ typedef struct saml {
   int isize;
   int seq_len;
   char seq[MAX_FIELD_WIDTH + 1];
+  char revcomp_seq[MAX_FIELD_WIDTH + 1];
   char qual[MAX_FIELD_WIDTH + 1];
   char tags[MAX_FIELD_WIDTH + 1];
   char BC[MAX_FIELD_WIDTH + 1];
