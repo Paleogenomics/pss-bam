@@ -80,20 +80,13 @@ int cigar_ok(const int seq_len, const char* cigar) {
 }
 
 
-/* Check if 1st base upstream/downstream of aln is specified in -U/-D;
-    also check if 2 bases are present further upstream/downstream of aln */
-int context_base_ok(const char* ref_seq, size_t ref_len, 
-                    const unsigned long aln_start, const unsigned long aln_end) {
-    if ( (aln_start-2) >= 0 &&
-         (aln_end+2) <= ref_len-1 ) {
-
-            char fb_upstr = ref_seq[aln_start-1];
-            char fb_dwnstr = ref_seq[aln_end+1];
-
-            if ( strchr(UPSTR_BASE_CNTXT, fb_upstr) &&
-                 strchr(DWNSTR_BASE_CNTXT, fb_dwnstr) ) {
-                return 1;
-            }
+/* Check if 1st base upstream/downstream of aln is specified in -U/-D */
+int context_bases_ok(const char* genome_seq, int read_len) {
+    char fb_upstr = genome_seq[1];
+    char fb_dwnstr = genome_seq[read_len+2];
+    if ( strchr(UPSTR_BASE_CNTXT, fb_upstr) &&
+         strchr(DWNSTR_BASE_CNTXT, fb_dwnstr) ) {
+        return 1;
     }
     return 0;
 }
@@ -113,7 +106,7 @@ FILE* bam_to_sam(const char* bam_fn) {
 
 
 /* Count the 2 context bases upstream/downstream of aln */
-void context_count(unsigned long** count_mtrx, const char fcb, const char scb) {
+int add_context_counts(unsigned long** count_mtrx, const char fcb, const char scb) {
     char context_bases[3] = {scb, fcb}; //second context base is 1st row
     for (int i = 0; i < 2; i++) {
         switch (context_bases[i]) {
@@ -133,146 +126,208 @@ void context_count(unsigned long** count_mtrx, const char fcb, const char scb) {
                 continue;
         }
     }
+    return 0;
 }
 
 
 /* Count base substitutions in the interior of aln in forward direction */
-void fwd_sub_count(unsigned long** fwd_counts, const char* ref_seq, \
-                    const char* read_seq, const unsigned long aln_start) {
+int add_fwd_counts(unsigned long** fwd_counts, const char* genome_seq, \
+                   const char* read_seq) {
     for (int i = 0; i < REGION_LEN; i++) {
-        //can't assume letter case in SAM
-        char pair_bases[3] = {toupper(read_seq[i]), ref_seq[aln_start+i]};
 
-        if (strcmp(pair_bases, "AA") == 0) {
+        char ref_base = genome_seq[2+i];
+        char read_base = toupper(read_seq[i]);
+        char pair[3] = {read_base, ref_base};
+
+        if (strcmp(pair, "AA") == 0) {
             fwd_counts[i+2][0] += 1;
         }
-        else if (strcmp(pair_bases, "AC") == 0) {
+        else if (strcmp(pair, "AC") == 0) {
             fwd_counts[i+2][1] += 1;
         }
-        else if (strcmp(pair_bases, "AG") == 0) {
+        else if (strcmp(pair, "AG") == 0) {
             fwd_counts[i+2][2] += 1;
         }
-        else if (strcmp(pair_bases, "AT") == 0) {
+        else if (strcmp(pair, "AT") == 0) {
             fwd_counts[i+2][3] += 1;
         }
-        else if (strcmp(pair_bases, "CA") == 0) {
+        else if (strcmp(pair, "CA") == 0) {
             fwd_counts[i+2][4] += 1;
         }
-        else if (strcmp(pair_bases, "CC") == 0) {
+        else if (strcmp(pair, "CC") == 0) {
             fwd_counts[i+2][5] += 1;
         }
-        else if (strcmp(pair_bases, "CG") == 0) {
+        else if (strcmp(pair, "CG") == 0) {
             fwd_counts[i+2][6] += 1;
         }
-        else if (strcmp(pair_bases, "CT") == 0) {
+        else if (strcmp(pair, "CT") == 0) {
             fwd_counts[i+2][7] += 1;
         }
-        else if (strcmp(pair_bases, "GA") == 0) {
+        else if (strcmp(pair, "GA") == 0) {
             fwd_counts[i+2][8] += 1;
         }
-        else if (strcmp(pair_bases, "GC") == 0) {
+        else if (strcmp(pair, "GC") == 0) {
             fwd_counts[i+2][9] += 1;
         }
-        else if (strcmp(pair_bases, "GG") == 0) {
+        else if (strcmp(pair, "GG") == 0) {
             fwd_counts[i+2][10] += 1;
         }
-        else if (strcmp(pair_bases, "GT") == 0) {
+        else if (strcmp(pair, "GT") == 0) {
             fwd_counts[i+2][11] += 1;
         }
-        else if (strcmp(pair_bases, "TA") == 0) {
+        else if (strcmp(pair, "TA") == 0) {
             fwd_counts[i+2][12] += 1;
         }
-        else if (strcmp(pair_bases, "TC") == 0) {
+        else if (strcmp(pair, "TC") == 0) {
             fwd_counts[i+2][13] += 1;
         }
-        else if (strcmp(pair_bases, "TG") == 0) {
+        else if (strcmp(pair, "TG") == 0) {
             fwd_counts[i+2][14] += 1;
         }
-        else if (strcmp(pair_bases, "TT") == 0) {
+        else if (strcmp(pair, "TT") == 0) {
             fwd_counts[i+2][15] += 1;
         }
         else {
             continue;
         }
     }
+    return 0;
 }
 
 
 /* Count base substitutions in the interior of aln in reverse direction */
-void rev_sub_count(unsigned long** rev_counts, const char* ref_seq, \
-                    const char* read_seq, const int seq_len, const unsigned long aln_end) {
+int add_rev_counts(unsigned long** rev_counts, const char* genome_seq, \
+                    const char* read_seq, int read_len) {
     for (int i = 0; i < REGION_LEN; i++) {
-        char pair_bases[3] = {toupper(read_seq[seq_len-(i+1)]), ref_seq[aln_end-i]};
 
-        if (strcmp(pair_bases, "AA") == 0) {
+        char ref_base = genome_seq[read_len+1-i];
+        char read_base = toupper(read_seq[read_len-1-i]);
+        char pair[3] = {read_base, ref_base};
+
+        if (strcmp(pair, "AA") == 0) {
             rev_counts[i+2][0] += 1;
         }
-        else if (strcmp(pair_bases, "AC") == 0) {
+        else if (strcmp(pair, "AC") == 0) {
             rev_counts[i+2][1] += 1;
         }
-        else if (strcmp(pair_bases, "AG") == 0) {
+        else if (strcmp(pair, "AG") == 0) {
             rev_counts[i+2][2] += 1;
         }
-        else if (strcmp(pair_bases, "AT") == 0) {
+        else if (strcmp(pair, "AT") == 0) {
             rev_counts[i+2][3] += 1;
         }
-        else if (strcmp(pair_bases, "CA") == 0) {
+        else if (strcmp(pair, "CA") == 0) {
             rev_counts[i+2][4] += 1;
         }
-        else if (strcmp(pair_bases, "CC") == 0) {
+        else if (strcmp(pair, "CC") == 0) {
             rev_counts[i+2][5] += 1;
         }
-        else if (strcmp(pair_bases, "CG") == 0) {
+        else if (strcmp(pair, "CG") == 0) {
             rev_counts[i+2][6] += 1;
         }
-        else if (strcmp(pair_bases, "CT") == 0) {
+        else if (strcmp(pair, "CT") == 0) {
             rev_counts[i+2][7] += 1;
         }
-        else if (strcmp(pair_bases, "GA") == 0) {
+        else if (strcmp(pair, "GA") == 0) {
             rev_counts[i+2][8] += 1;
         }
-        else if (strcmp(pair_bases, "GC") == 0) {
+        else if (strcmp(pair, "GC") == 0) {
             rev_counts[i+2][9] += 1;
         }
-        else if (strcmp(pair_bases, "GG") == 0) {
+        else if (strcmp(pair, "GG") == 0) {
             rev_counts[i+2][10] += 1;
         }
-        else if (strcmp(pair_bases, "GT") == 0) {
+        else if (strcmp(pair, "GT") == 0) {
             rev_counts[i+2][11] += 1;
         }
-        else if (strcmp(pair_bases, "TA") == 0) {
+        else if (strcmp(pair, "TA") == 0) {
             rev_counts[i+2][12] += 1;
         }
-        else if (strcmp(pair_bases, "TC") == 0) {
+        else if (strcmp(pair, "TC") == 0) {
             rev_counts[i+2][13] += 1;
         }
-        else if (strcmp(pair_bases, "TG") == 0) {
+        else if (strcmp(pair, "TG") == 0) {
             rev_counts[i+2][14] += 1;
         }
-        else if (strcmp(pair_bases, "TT") == 0) {
+        else if (strcmp(pair, "TT") == 0) {
             rev_counts[i+2][15] += 1;
         }
         else {
             continue;
         }
     }
+    return 0;
+}
+
+
+/* add_counts_from_aligned_seq
+   Takes a genomic sequence with 2 bases of context upstream and downstream,
+   the read sequence, and the counts matrices. Goes through the beginning and
+   end of the alignment and updates the counts.
+   The genome and read sequence must be aligned without gaps. That is, the
+   CIGAR string must have been checked to make sure that there are no
+   D, I, H, or S characters, only M.
+   If the alignment was to the reverse complement of the genome sequence, then
+   the read and genome sequence are assumed to already by reverse complemented
+   here.
+   Args: unsigned long** fwd_counts - pointer to array of Genome/Read base
+                                      counts to be added to by this alignment
+				      from the beginning of the alignment
+         unsigned long** rev_counts - pointer to array of Genome/Read base
+                                      counts to be added to by this alignment
+				      from the end of the alignment
+	 char* genome_seq - pointer to genome sequence of this alignment with
+                            two unaligned bases at the beginning and two unaligned
+			    bases at the end
+	 char* read_seq -   pointer to the aligned read sequence
+	 int read_seq_len - length of the read sequence
+    Returns 0 if the alignment was analyzed successfully, adding info to
+    fwd_counts and rev_counts.
+    Returns 1 if there was a problem.
+ */
+int add_counts_from_aligned_seq(unsigned long** fwd_counts, unsigned long** rev_counts, \
+                                const char* genome_seq, const char* read_seq, int read_len) {
+    char fb_upstr = genome_seq[1];
+    char sb_upstr = genome_seq[0];
+    char fb_dwnstr = genome_seq[read_len+2];
+    char sb_dwnstr = genome_seq[read_len+3];
+
+    int cfc = add_context_counts(fwd_counts, fb_upstr, sb_upstr);
+    int crc = add_context_counts(rev_counts, fb_dwnstr, sb_dwnstr);
+    int fc = add_fwd_counts(fwd_counts, genome_seq, read_seq);
+    int rc = add_rev_counts(rev_counts, genome_seq, read_seq, read_len);
+
+    if ( cfc || crc || fc || rc ) {
+        return 1;
+    }
+    return 0;
+}
+
+
+void get_substring(const char* str, char* substr, size_t start, int len) {
+    strncpy(substr, str+start, len);
 }
 
 
 /* Add counts to output matrices from a single read */
 int process_aln(unsigned long** fwd_counts, unsigned long** rev_counts, \
-                    Genome* genome, Saml* sp) {
+                Genome* genome, Saml* sp) {
     
-    Seq* rseq = find_seq(genome, sp->rname);
-    if (rseq == NULL) {
+    int read_len = sp->seq_len;
+    char genome_seq[read_len+5]; //4 context bases + NULL
+
+    Seq* ref = find_seq(genome, sp->rname);
+    if (ref == NULL) {
         return 1;
     }
-    char* ref_seq = rseq->seq;
+    char* ref_seq = ref->seq;
 
-    unsigned long aln_start = (sp->pos)-1; //pos in sam file is 1-based
+    unsigned long aln_start = (sp->pos)-1; //pos in sam is 1-based
     unsigned long aln_end = aln_start+(sp->seq_len)-1;
 
-    if ( (sp->mapq >= MIN_MQ) &&
+    if ( (aln_start-2 >= 0 ) &&   //check for presence of context bases
+         (aln_end+2 <= ref->len-1) && 
+         (sp->mapq >= MIN_MQ) &&
          (read_len_ok(sp->seq_len)) &&
          (cigar_ok(sp->seq_len, sp->cigar)) &&
          (sp->read_paired == FALSE) && 
@@ -282,40 +337,36 @@ int process_aln(unsigned long** fwd_counts, unsigned long** rev_counts, \
          (sp->is_duplicate == FALSE) &&
          (sp->supplementary_alignment == FALSE) ) {
         
+        // get part of ref_seq where the read aligns plus 2 extra bases 
+        // upstream/downstream and copy it into genome_seq
+        get_substring(ref_seq, genome_seq, aln_start-2, read_len+4);
+        
         if (sp->read_reverse == TRUE) {
-            char* rev_ref = malloc(rseq->len * sizeof(char));
-            do_reverse_complement(ref_seq, rev_ref, rseq->len);
+            char revcomp_genome_seq[read_len+5];
+            do_reverse_complement(genome_seq, revcomp_genome_seq, read_len+4);
 
-            if (context_base_ok(rev_ref, rseq->len, aln_start, aln_end)) {
-                char rfb_upstr = rev_ref[aln_start-1]; //reverse 1st base upstream
-                char rsb_upstr = rev_ref[aln_start-2]; //reverse 2nd base upstream
-                char rfb_dwnstr = rev_ref[aln_end+1];  //downstream
-                char rsb_dwnstr = rev_ref[aln_end+2];
-            
-                context_count(fwd_counts, rfb_upstr, rsb_upstr); //count upstream context bases
-                context_count(rev_counts, rfb_dwnstr, rsb_dwnstr); //count downstream context bases
-                do_reverse_complement(sp->seq, sp->revcomp_seq, sp->seq_len);
-                fwd_sub_count(fwd_counts, rev_ref, sp->revcomp_seq, aln_start);
-                rev_sub_count(rev_counts, rev_ref, sp->revcomp_seq, sp->seq_len, aln_end);
-            }
-            free(rev_ref);
+            if ( context_bases_ok(revcomp_genome_seq, read_len) ) {  
+                char revcomp_read_seq[read_len+1];
+                do_reverse_complement(sp->seq, revcomp_read_seq, read_len);
+                int add_status = add_counts_from_aligned_seq(fwd_counts, rev_counts, revcomp_genome_seq,
+                                                             revcomp_read_seq, read_len);
+                if (add_status) {
+                    return 1;
+                }
+            }     
         }
             
-        else if (context_base_ok(ref_seq, rseq->len, aln_start, aln_end)) {
-            char fb_upstr = ref_seq[aln_start-1];
-            char sb_upstr = ref_seq[aln_start-2];
-            char fb_dwnstr = ref_seq[aln_end+1];
-            char sb_dwnstr = ref_seq[aln_end+2];
-
-            context_count(fwd_counts, fb_upstr, sb_upstr);
-            context_count(rev_counts, fb_dwnstr, sb_dwnstr);
-            fwd_sub_count(fwd_counts, ref_seq, sp->seq, aln_start);
-            rev_sub_count(rev_counts, ref_seq, sp->seq, sp->seq_len, aln_end);
+        else if ( context_bases_ok(genome_seq, read_len) ) {
+            int add_status = add_counts_from_aligned_seq(fwd_counts, rev_counts,
+                                                         genome_seq, sp->seq, read_len);
+            if (add_status) {
+                return 1;
+            }
         }
     }
 
     else {
-        fprintf(stderr, "%s did not pass filters, continuing to next entry...\n", sp->qname);
+        fprintf(stderr, "%s did not pass filters\n", sp->qname);
     }
     return 0;
 }
@@ -456,7 +507,7 @@ int main(int argc, char* argv[]) {
         }
         int process_status = process_aln(fwd_counts, rev_counts, genome, sp);
         if (process_status) {
-            fprintf(stderr, "Problem adding counts from alignment, continuing to next entry...\n");
+            fprintf(stderr, "Problem adding counts from %s\n", sp->qname);
             continue;
         }
     }
