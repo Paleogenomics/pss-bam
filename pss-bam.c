@@ -1,4 +1,3 @@
-
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -8,6 +7,7 @@
 
 #define TRUE 1
 #define FALSE 0
+#define DEBUG (0)
 
 static int REGION_LEN = 15;
 static unsigned long MIN_READ_LEN = 0;
@@ -491,6 +491,7 @@ int main(int argc, char* argv[]) {
         exit(1);
     }
 
+    fprintf( stderr, "Reading genome sequence from:\n%s\n", fasta_fn );
     Genome* genome = init_genome(fasta_fn);
     unsigned long** fwd_counts = init_count_mtrx();
     unsigned long** rev_counts = init_count_mtrx();
@@ -501,12 +502,12 @@ int main(int argc, char* argv[]) {
      
     while (fgets(saml_buf, MAX_LINE_LEN+1, sam_out)) {
         int parse_status = line2saml(saml_buf, sp);
-        if (parse_status) {
+        if (parse_status && DEBUG) {
             fprintf(stderr, "Problem parsing alignment, continuing to next entry...\n");
             continue;
         }
         int process_status = process_aln(fwd_counts, rev_counts, genome, sp);
-        if (process_status) {
+        if (process_status && DEBUG) {
             fprintf(stderr, "Problem adding counts from %s\n", sp->qname);
             continue;
         }
