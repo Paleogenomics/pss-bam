@@ -57,9 +57,12 @@ void do_reverse_complement(const char* seq, char* rev_buf, size_t seq_len) {
 }
 
 
-/* Check if read length is between values specified by -l and -L */
+/* Check if read length is between values specified by -l and -L 
+   and that it's >= REGION_LEN */
 int read_len_ok(const int seq_len) {
-    if ( (seq_len >= MIN_READ_LEN) && (seq_len <= MAX_READ_LEN) ) {
+    if ( (seq_len >= MIN_READ_LEN) && 
+         (seq_len <= MAX_READ_LEN) &&
+         (seq_len >= REGION_LEN) ) {
         return 1;
     }
     return 0;
@@ -312,16 +315,13 @@ int process_aln(unsigned long** fwd_counts, unsigned long** rev_counts, \
                 Genome* genome, Saml* sp) {
     
     int read_len = sp->seq_len;
-    if (read_len < REGION_LEN) {
-        return 1;
-    }
 
     // allocate char array that will contain only aligned region of genome
     // and 2 context bases upstream/downstream
     char genome_seq[read_len+5]; // 4 context bases total + NULL
     Seq* ref = find_seq(genome, sp->rname);
     if (ref == NULL) {
-        return 2;
+        return 1;
     }
 
     char* ref_seq = ref->seq;
@@ -332,7 +332,7 @@ int process_aln(unsigned long** fwd_counts, unsigned long** rev_counts, \
     if ( (aln_start-2 >= 0) &&   // check for presence of context bases
          (aln_end+2 <= ref->len-1) && 
          (sp->mapq >= MIN_MQ) &&
-         (read_len_ok(sp->seq_len)) &&
+         (read_len_ok(read_len)) &&
          (cigar_ok(sp->seq_len, sp->cigar)) &&
          (sp->read_paired == FALSE) && 
          (sp->read_unmapped == FALSE) &&
@@ -366,7 +366,7 @@ int process_aln(unsigned long** fwd_counts, unsigned long** rev_counts, \
     }
 
     else {
-        return 3;
+        return 2;
     }
     return 0;
 }
@@ -521,12 +521,9 @@ int main(int argc, char* argv[]) {
             continue;
         }
         else if ( (process_status == 1) && (DEBUG == TRUE) ) {
-            fprintf( stderr, "%s: Region length to report (-r) surpasses length of alignment.\n", sp->qname );
-        }
-        else if ( (process_status == 2) && (DEBUG == TRUE) ) {
             fprintf( stderr, "%s: Unable to find sequence with name %s in genome.\n", sp->qname, sp->rname );
         }
-        else if ( (process_status == 3) && (DEBUG == TRUE) ) {
+        else if ( (process_status == 2) && (DEBUG == TRUE) ) {
             fprintf( stderr, "%s: Alignment did not pass filters.\n", sp->qname );
         }
     }
