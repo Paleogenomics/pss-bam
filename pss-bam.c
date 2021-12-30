@@ -366,7 +366,9 @@ int process_aln(unsigned long** fwd_counts, unsigned long** rev_counts, \
     }
 
     else {
+      if ( DEBUG ) {
         fprintf(stderr, "%s did not pass filters\n", sp->qname);
+      }
     }
     return 0;
 }
