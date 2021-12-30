@@ -52,20 +52,20 @@ int line2saml( const char* line, Saml* sp ) {
     if ( strlen( sp->seq ) == strlen( sp->qual ) ) {
       sp->seq_len = strlen( sp->seq );
 
-      sp->read_paired = sp->flag & (1 << 0);
-      sp->pair_properly_aligned = sp->flag & (1 << 1);
-      sp->read_unmapped = sp->flag & (1 << 2);
-      sp->mate_unmapped = sp->flag & (1 << 3);
-      sp->read_reverse = sp->flag & (1 << 4);
-      sp->mate_reverse = sp->flag & (1 << 5);
-      sp->first_in_pair = sp->flag & (1 << 6);
-      sp->second_in_pair = sp->flag & (1 << 7);
-      sp->not_primary = sp->flag & (1 << 8);
-      sp->not_passing_filters = sp->flag & (1 << 9);
-      sp->is_duplicate = sp->flag & (1 << 10);
-      sp->supplementary_alignment = sp->flag & (1 << 11);
-
-      if ( sp->read_paired == 0 ) {
+      sp->paired = (sp->flag >> 0) & 1;
+      sp->proper_pair = (sp->flag >> 1) & 1;
+      sp->unmap = (sp->flag >> 2) & 1;
+      sp->munmap = (sp->flag >> 3) & 1;
+      sp->reverse = (sp->flag >> 4) & 1;
+      sp->mreverse = (sp->flag >> 5) & 1;
+      sp->read1 = (sp->flag >> 6) & 1;
+      sp->read2 = (sp->flag >> 7) & 1;
+      sp->secondary = (sp->flag >> 8) & 1;
+      sp->qc_failed = (sp->flag >> 9) & 1;
+      sp->duplicate = (sp->flag >> 10) & 1;
+      sp->supplementary = (sp->flag >> 11) & 1;
+      
+      if ( sp->paired == 0 ) {
         sp->isize = strlen( sp->seq );
       }
       
