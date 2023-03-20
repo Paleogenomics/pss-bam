@@ -226,12 +226,14 @@ int process_aln(KSP fpks, KSP tpks, Genome* genome, Saml* sp) {
          int small_k - integer representing k; with each recursive call, 
                        this number decreases until reaching 0 and the function
                        returns (base case)
-         KSP ks - pointer to Kmers structure */
-void print_kmer_counts(const char bases[], char kmer_tmp[], int small_k, KSP ks) {
+         KSP fpks - pointer to 5' Kmers structure
+         KSP tpks - pointer to 3' Kmers structure */
+void print_kmer_counts(const char bases[], char kmer_tmp[], int small_k, KSP fpks, KSP tpks) {
     if (small_k == 0) {
         kmer_tmp[KLEN] = '\0';
-        unsigned int count = kmer2count(&(kmer_tmp[0]), ks);
-        printf("%s\t%u\n", kmer_tmp, count);
+        unsigned int fp_count = kmer2count(&(kmer_tmp[0]), fpks);
+        unsigned int tp_count = kmer2count(&(kmer_tmp[0]), tpks);
+        printf("%s\t%u\t%u\n", kmer_tmp, fp_count, tp_count);
         return;
     }
     int i, j;
@@ -242,7 +244,7 @@ void print_kmer_counts(const char bases[], char kmer_tmp[], int small_k, KSP ks)
         }
         new_tmp[j] = bases[i];
         // recursive call to continue adding bases until length = k
-        print_kmer_counts(bases, new_tmp, small_k-1, ks);
+        print_kmer_counts(bases, new_tmp, small_k-1, fpks, tpks);
     }
 }
 
@@ -365,12 +367,10 @@ int main(int argc, char* argv[]) {
     }
 
     char bases[5] = "ACGT";
-    char kmer_5p[100], kmer_3p[100];
-    printf("### fragkon.c v0.1\n### %s\n### %s\n", fasta_fn, bam_fn);
-    printf("# 5' sequence fragmentation contexts\n\n");
-    print_kmer_counts(bases, kmer_5p, KLEN, fpks);
-    printf("\n# 3' sequence fragmentation contexts\n\n");
-    print_kmer_counts(bases, kmer_3p, KLEN, tpks);
+    char kmer_tmp[100];
+    printf("### fragkon.c v0.2\n### %s\n### %s\n", fasta_fn, bam_fn);
+    printf("# KMER\t5' CONTEXT COUNTS\t3' CONTEXT COUNTS\n");
+    print_kmer_counts(bases, kmer_tmp, KLEN, fpks, tpks);
     free(fasta_fn);
     free(bam_fn);
     free(sp);
