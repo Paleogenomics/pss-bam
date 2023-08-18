@@ -45,6 +45,7 @@ typedef struct saml {
   char tags[MAX_FIELD_WIDTH + 1];
   char BC[MAX_FIELD_WIDTH + 1];
   char RG[MAX_FIELD_WIDTH + 1];
+  char opt_tags[MAX_FIELD_WIDTH + 1];
   int aln_seq_len;
   int NM;
   int AS; // alignment score
@@ -57,4 +58,5 @@ typedef struct saml {
 int line2saml( const char* line, Saml* sp );
 int is_header( const char* line );
 int aln_seq_len( const char* cigar );
+int has_tag( Saml* sp, const char* utag );
 int good_score( Saml* sp, float m, float b );

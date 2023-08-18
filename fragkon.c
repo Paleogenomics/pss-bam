@@ -15,7 +15,8 @@ static int KLEN = 8;
 static int MIN_MQ = 0;
 static unsigned long MIN_READ_LEN = 0;
 static unsigned long MAX_READ_LEN = 250000000;
-static unsigned int MERGED_ONLY = FALSE;
+static int OPT_M = FALSE;
+static int OPT_T = FALSE;
 
 
 /* Get the reverse complement of a sequence
@@ -185,7 +186,7 @@ int process_aln(KSP fpks, KSP tpks, Genome* genome, Saml* sp) {
         // process paired reads
         // use 1st read in pair for 5' kmer context, and 2nd read for 3'
         else if ( sp->paired == TRUE &&
-                  MERGED_ONLY == FALSE &&
+                  OPT_M == TRUE &&
                   sp->proper_pair == TRUE &&
                   sp->munmap == FALSE ) {
         
@@ -257,8 +258,9 @@ int main(int argc, char* argv[]) {
     //start = clock();
 
     int option;
-    char* opts = ":F:B:k:l:L:q:m";
-    char* fasta_fn, *bam_fn, *ptr1, *ptr2;
+    char* opts = ":F:B:k:l:L:q:t:m";
+    char* fasta_fn, *bam_fn, *ptr1, *ptr2, *utag;
+    char user_cmd[MAX_FIELD_WIDTH + 1];
     while ( (option = getopt(argc, argv, opts)) != -1 ) {
         switch (option) {
             case 'F':
@@ -279,8 +281,12 @@ int main(int argc, char* argv[]) {
             case 'q':
                 MIN_MQ = atoi(optarg);
                 break;
+            case 't':
+                OPT_T = TRUE;
+                utag = strdup(optarg);
+                break;
             case 'm':
-                MERGED_ONLY = TRUE;
+                OPT_M = TRUE;
                 break;
             case ':':
                 fprintf( stderr, "Please enter required argument for option -%c.\n", optopt );
@@ -311,21 +317,18 @@ int main(int argc, char* argv[]) {
         fprintf(stderr, "-l <minimum length of read to report (default: 0)>\n");
         fprintf(stderr, "-L <maximum length of read to report (default: 250000000)>\n");
         fprintf(stderr, "-q <map quality filter of read to report (default: 0)>\n" );
+        fprintf(stderr, "-t <only consider reads with this optional field (in TAG:TYPE:VALUE format)>\n");
         fprintf(stderr, "-m <only consider merged reads>\n");
         exit(1);
     }
 
-    if (MERGED_ONLY == TRUE) {
-        fprintf( stderr,
-                 "Full command: %s -F %s -B %s -k %d -l %lu -L %lu -q %d -m\n", 
-                 argv[0], fasta_fn, bam_fn, KLEN, MIN_READ_LEN, MAX_READ_LEN, MIN_MQ);
+    strcpy(user_cmd, argv[0]);
+    strcat(user_cmd, " ");
+    for (int i = 1; i < argc; i++) {
+        strcat(user_cmd, argv[i]);
+        strcat(user_cmd, " ");
     }
-
-    else {
-        fprintf( stderr,
-                 "Full command: %s -F %s -B %s -k %d -l %lu -L %lu -q %d\n", 
-                 argv[0], fasta_fn, bam_fn, KLEN, MIN_READ_LEN, MAX_READ_LEN, MIN_MQ);
-    }
+    fprintf( stderr,  "# Entered command: %s\n", user_cmd );
 
     fprintf( stderr, "Input kmer length = %d.\n", KLEN);
     if ((KLEN & 1) != 0) {
@@ -351,6 +354,15 @@ int main(int argc, char* argv[]) {
             continue;
         }
 
+        if ( OPT_T == TRUE ) {
+            if ( !has_tag(sp, utag) ) {
+                if (DEBUG) {
+                    fprintf( stderr, "%s does not have specified tag %s\n", sp->qname, utag);
+                }
+                continue;
+            }
+        }
+
         int process_status = process_aln(fpks, tpks, genome, sp);
         if (process_status == 0) {
             continue;
@@ -368,11 +380,12 @@ int main(int argc, char* argv[]) {
 
     char bases[5] = "ACGT";
     char kmer_tmp[100];
-    printf("### fragkon.c v0.2\n### %s\n### %s\n", fasta_fn, bam_fn);
+    printf("### fragkon.c v0.3\n### %s\n### %s\n", fasta_fn, bam_fn);
     printf("# KMER\t5' CONTEXT COUNTS\t3' CONTEXT COUNTS\n");
     print_kmer_counts(bases, kmer_tmp, KLEN, fpks, tpks);
     free(fasta_fn);
     free(bam_fn);
+    free(utag);
     free(sp);
     fclose(sam_out);
     

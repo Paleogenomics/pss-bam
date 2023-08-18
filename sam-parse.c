@@ -81,9 +81,13 @@ int line2saml( const char* line, Saml* sp ) {
         pos++;
       }
 
+      if (pos < len) {
+        strcpy(sp->opt_tags, &line[pos]);
+      }
+
       /* Note, I don't try to get all the tags - just the ones
 	 I currently care about. */
-      while( pos < len ) {
+    /**  while( pos < len ) {
         sscanf( &line[pos], "%2s:%c:%s", tag, &type, value );
 
         if( strcmp( tag, "BC" ) == 0 ) {
@@ -111,12 +115,12 @@ int line2saml( const char* line, Saml* sp ) {
           sp->XG = atoi( value );
           got_XG = 1;
         }
-        /* Push pos up to the next TAG or end of line */
+        // Push pos up to the next TAG or end of line
         while( (line[pos] != '\t') && (pos < len) ) {
           pos++;
         }
 	      pos++;
-      }
+      }**/
       return 0;
     }
     return 1;
@@ -168,6 +172,25 @@ int is_header( const char* line ) {
   else {
     return 0;
   }
+}
+
+int has_tag(Saml* sp, const char* utag) {
+  char* token;
+  char buf[MAX_FIELD_WIDTH + 1];
+  strcpy(buf, sp->opt_tags);
+  token = strtok(buf, "\t");
+  while (token != NULL) {
+    if (token[strlen(token)-1] == '\n') {
+      token[strlen(token)-1] = '\0';
+    }
+    if (strcmp(token, utag) == 0) {
+      return 1;
+    }
+    else {
+      token = strtok(NULL, "\t");
+    }
+  }
+  return 0;
 }
 
 /* Args: (1) pointer to struct saml with alignment info
