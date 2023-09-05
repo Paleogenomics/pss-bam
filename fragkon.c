@@ -16,7 +16,6 @@ static int MIN_MQ = 0;
 static unsigned long MIN_READ_LEN = 0;
 static unsigned long MAX_READ_LEN = 250000000;
 static int OPT_M = FALSE;
-static int OPT_T = FALSE;
 
 
 /* Get the reverse complement of a sequence
@@ -258,7 +257,7 @@ int main(int argc, char* argv[]) {
     //start = clock();
 
     int option;
-    char* opts = ":F:B:k:l:L:q:t:m";
+    char* opts = ":F:B:k:l:L:q:m";
     char* fasta_fn, *bam_fn, *ptr1, *ptr2, *utag;
     char user_cmd[MAX_FIELD_WIDTH + 1];
     while ( (option = getopt(argc, argv, opts)) != -1 ) {
@@ -280,10 +279,6 @@ int main(int argc, char* argv[]) {
                 break;
             case 'q':
                 MIN_MQ = atoi(optarg);
-                break;
-            case 't':
-                OPT_T = TRUE;
-                utag = strdup(optarg);
                 break;
             case 'm':
                 OPT_M = TRUE;
@@ -317,7 +312,6 @@ int main(int argc, char* argv[]) {
         fprintf(stderr, "-l <minimum length of read to report (default: 0)>\n");
         fprintf(stderr, "-L <maximum length of read to report (default: 250000000)>\n");
         fprintf(stderr, "-q <map quality filter of read to report (default: 0)>\n" );
-        fprintf(stderr, "-t <only consider reads with this optional field (in TAG:TYPE:VALUE format)>\n");
         fprintf(stderr, "-m <only consider merged reads>\n");
         exit(1);
     }
@@ -353,16 +347,6 @@ int main(int argc, char* argv[]) {
             }
             continue;
         }
-
-        if ( OPT_T == TRUE ) {
-            if ( !has_tag(sp, utag) ) {
-                if (DEBUG) {
-                    fprintf( stderr, "%s does not have specified tag %s\n", sp->qname, utag);
-                }
-                continue;
-            }
-        }
-
         int process_status = process_aln(fpks, tpks, genome, sp);
         if (process_status == 0) {
             continue;

@@ -58,5 +58,4 @@ typedef struct saml {
 int line2saml( const char* line, Saml* sp );
 int is_header( const char* line );
 int aln_seq_len( const char* cigar );
-int has_tag( Saml* sp, const char* utag );
 int good_score( Saml* sp, float m, float b );
