@@ -6,6 +6,7 @@
 
 static int MAX_OH_LEN = 20;
 
+
 FILE* bam_to_sorted_sam(const char* bam_fn) {
     char cmd_buf[MAX_LINE_LEN + 1];
     sprintf(cmd_buf, "samtools sort --output-fmt sam %s", bam_fn);
@@ -16,6 +17,7 @@ FILE* bam_to_sorted_sam(const char* bam_fn) {
     }
     return sam_out;
 }
+
 
 size_t get_right_pos(size_t left_pos, const char* cigar) {
     size_t aln_len = 0;
@@ -56,16 +58,6 @@ long int get_LC_tag(Saml* sp) {
     }
   }
   return -1;
-}
-
-
-int is_tagged(char** tagged_arr, size_t n, const char* qname) {
-    for (int i = 0; i < n; i++) {
-        if ( strcmp(tagged_arr[i], qname) == 0 ) {
-            return 1;
-        }
-    }
-    return 0;
 }
 
 
@@ -111,15 +103,18 @@ int main(int argc, char* argv[]) {
 
     if (in_fn[0] == '\0' || out_prefix[0] == '\0') {
         fprintf( stderr, "hangover-bam: Program for characterizing 5' & 3' overhangs in BAM reads.\n" );
-        fprintf( stderr, "-i <input BAM file (required)>\n" );
-        fprintf( stderr, "-o <outpu BAM prefix (required)>\n" );
+        fprintf( stderr, "The output is a BAM file consisting of read pairs with the overhang length\n" );
+        fprintf( stderr, "recorded in the OH tag on the forward read of each pair. These read are\n" );
+        fprintf( stderr, "potentially from the opposite strands of the same DNA template.\n" );
+        fprintf( stderr, "-i <input BAM file, can be unsorted (required)>\n" );
+        fprintf( stderr, "-o <output BAM prefix (required)>\n" );
         fprintf( stderr, "-m <max overhang length (default: 20)>\n" );
         exit(1);
     }
 
 
-    if (MAX_OH_LEN <= 0) {
-        fprintf( stderr, "Error: Maximum overhang length must be > 0.\n");
+    if (MAX_OH_LEN < 0) {
+        fprintf( stderr, "Error: Maximum overhang length must be >= 0.\n");
         exit(1);
     }
 
@@ -170,9 +165,9 @@ int main(int argc, char* argv[]) {
             lp1 = lp2;
             continue;
         }
-        // overhang is always + because next read's pos
-        // is always larger than currrent read's pos
-        // only tags forward reads
+        // overhang is always (+) because next read's pos
+        // is always larger than currrent read's pos;
+        // we only tag forward reads
         int oh = next_sp->pos - cur_sp->pos;
         if ( oh <= MAX_OH_LEN &&
              cur_sp->reverse &&
@@ -205,7 +200,6 @@ int main(int argc, char* argv[]) {
         if (strlen(cur_sp->tags) > 0) {
             cur_sp->tags[strlen(cur_sp->tags)-1] = '\0'; //same here
         }
-        //printf("POS: %lu, TAGS: %s\n", cur_sp->pos, cur_sp->tags);
         fprintf( tmp2_fp, "%s\t%u\t%s\t%lu\t%u\t%s\t%s\t%u\t%i\t%s\t%s\t%s\tLC:i:%lu\n",
                  cur_sp->qname,
                  cur_sp->flag,
@@ -281,7 +275,7 @@ int main(int argc, char* argv[]) {
                          cur_sp->qual,
                          cur_sp->tags );
                 
-                // next read is forward -> tag
+                // next read is forward -> tag it
                 next_sp->tags[strlen(next_sp->tags)-1] = '\0'; // remove new line char
                 fprintf( tmp1_fp, "%s\t%u\t%s\t%lu\t%u\t%s\t%s\t%u\t%i\t%s\t%s\t%s\tOH:i:%d\n",
                          next_sp->qname,
@@ -310,7 +304,7 @@ int main(int argc, char* argv[]) {
             next_lc = get_LC_tag(next_sp);
             if (cur_lc != -1 && next_lc != -1) {
                 cur_sp->tags[strlen(cur_sp->tags)-1] = '\0'; //remove new line char
-                //current read is forward -> tag
+                //current read is forward -> tag it
                 fprintf( tmp1_fp, "%s\t%u\t%s\t%lu\t%u\t%s\t%s\t%u\t%i\t%s\t%s\t%s\tOH:i:%d\n",
                          cur_sp->qname,
                          cur_sp->flag,
