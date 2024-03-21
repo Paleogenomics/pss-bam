@@ -15,7 +15,7 @@ static int KLEN = 8;
 static int MIN_MQ = 0;
 static unsigned long MIN_READ_LEN = 0;
 static unsigned long MAX_READ_LEN = 250000000;
-static int OPT_M = FALSE;
+static int MERGED_ONLY = FALSE;
 
 
 /* Get the reverse complement of a sequence
@@ -185,7 +185,7 @@ int process_aln(KSP fpks, KSP tpks, Genome* genome, Saml* sp) {
         // process paired reads
         // use 1st read in pair for 5' kmer context, and 2nd read for 3'
         else if ( sp->paired == TRUE &&
-                  OPT_M == TRUE &&
+                  MERGED_ONLY == FALSE &&
                   sp->proper_pair == TRUE &&
                   sp->munmap == FALSE ) {
         
@@ -281,7 +281,7 @@ int main(int argc, char* argv[]) {
                 MIN_MQ = atoi(optarg);
                 break;
             case 'm':
-                OPT_M = TRUE;
+                MERGED_ONLY = TRUE;
                 break;
             case ':':
                 fprintf( stderr, "Please enter required argument for option -%c.\n", optopt );
