@@ -12,8 +12,8 @@ set terminal postscript eps color "Arial" 14;
 # to generate the plot
 #############################################################
 set ytic 0.05;                        # tic marks on y-axis #
-set output "JK469.pss.v0.6.eps";          # output filename #
-datafile = "JK469.pss.dat";         # input pss-bam.pl file #
+set output "plot.eps";          # output filename #
+datafile = "filename.pss.counts.txt"; # input .pss.counts.txt file #
 max_damage = 0.1           # high fraction of C->T in plot  #
 #############################################################
 
@@ -40,41 +40,41 @@ set obj rect from -1.0, graph 0 to 1.5, graph 1;
 r = 14;
 set origin 0, 0;
 
-#set title "JK469 - Merged";
+#set title "plot-title";
 
-plot [-1.0:17.0][0:max_damage] datafile index 0 using ($2+$3+$4+$5) axes x1y2 ls 4,\
-     '' index 0 using ($10+$11+$12+$13) axes x1y2 ls 6,\
-     '' index 0 using ($6+$7+$8+$9) axes x1y2 ls 5,\
-     '' index 0 using ($14+$15+$16+$17) axes x1y2 ls 7,\
-     '' index 0 u ($1+2):($3==0?NaN:$3/($2+$3+$4+$5)) t "A->C" w l ls 1,\
-     '' index 0 u ($1+2):($4==0?NaN:$4/($2+$3+$4+$5)) t "A->G" w l ls 1,\
-     '' index 0 u ($1+2):($5==0?NaN:$5/($2+$3+$4+$5)) t "A->T" w l ls 1,\
-     '' index 0 u ($1+2):($6==0?NaN:$6/($6+$7+$8+$9)) t "C->A" w l ls 1,\
-     '' index 0 u ($1+2):($8==0?NaN:$8/($6+$7+$8+$9)) t "C->G" w l ls 1,\
-     '' index 0 u ($1+2):($9==0?NaN:$9/($6+$7+$8+$9)) t "C->T" w l ls 2,\
-     '' index 0 u ($1+2):($10==0?NaN:$10/($10+$11+$12+$13)) t "G->A" w l ls 3,\
-     '' index 0 u ($1+2):($11==0?NaN:$11/($10+$11+$12+$13)) t "G->C" w l ls 1,\
-     '' index 0 u ($1+2):($13==0?NaN:$13/($10+$11+$12+$13)) t "G->T" w l ls 1,\
-     '' index 0 u ($1+2):($14==0?NaN:$14/($14+$15+$16+$17)) t "T->A" w l ls 1,\
-     '' index 0 u ($1+2):($15==0?NaN:$15/($14+$15+$16+$17)) t "T->C" w l ls 1,\
-     '' index 0 u ($1+2):($16==0?NaN:$16/($14+$15+$16+$17)) t "T->G" w l ls 1;
+plot [-1.0:17.0][0:max_damage] datafile index 0 using ($2+$6+$10+$14) axes x1y2 ls 4,\
+     '' index 0 using ($4+$8+$12+$16) axes x1y2 ls 6,\
+     '' index 0 using ($3+$7+$11+$15) axes x1y2 ls 5,\
+     '' index 0 using ($5+$9+$13+$17) axes x1y2 ls 7,\
+     '' index 0 u ($1+2):($3==0?NaN:$3/($3+$7+$11+$15)) t "C->A" w l ls 1,\
+     '' index 0 u ($1+2):($4==0?NaN:$4/($4+$8+$12+$16)) t "G->A" w l ls 3,\
+     '' index 0 u ($1+2):($5==0?NaN:$5/($5+$9+$13+$17)) t "T->A" w l ls 1,\
+     '' index 0 u ($1+2):($6==0?NaN:$6/($2+$6+$10+$14)) t "A->C" w l ls 1,\
+     '' index 0 u ($1+2):($8==0?NaN:$8/($4+$8+$12+$16)) t "G->C" w l ls 1,\
+     '' index 0 u ($1+2):($9==0?NaN:$9/($5+$9+$13+$17)) t "T->C" w l ls 1,\
+     '' index 0 u ($1+2):($10==0?NaN:$10/($2+$6+$10+$14)) t "A->G" w l ls 1,\
+     '' index 0 u ($1+2):($11==0?NaN:$11/($3+$7+$11+$15)) t "C->G" w l ls 1,\
+     '' index 0 u ($1+2):($13==0?NaN:$13/($5+$9+$13+$17)) t "T->G" w l ls 1,\
+     '' index 0 u ($1+2):($14==0?NaN:$14/($2+$6+$10+$14)) t "A->T" w l ls 1,\
+     '' index 0 u ($1+2):($15==0?NaN:$15/($3+$7+$11+$15)) t "C->T" w l ls 2,\
+     '' index 0 u ($1+2):($16==0?NaN:$16/($4+$8+$12+$16)) t "G->T" w l ls 1;
 
 set origin 0.5, 0;
 unset obj;
 set obj rect from 14.5, graph 0 to 17, graph 1;
-plot [-1.0:17.0][0:max_damage] datafile index 1 using ($2+$3+$4+$5) axes x1y2 ls 4,\
-     '' index 1 using ($10+$11+$12+$13) axes x1y2 ls 6,\
-     '' index 1 using ($6+$7+$8+$9) axes x1y2 ls 5,\
-     '' index 1 using ($14+$15+$16+$17) axes x1y2 ls 7,\
-     '' index 1 using ($3==0?NaN:$3/($2+$3+$4+$5)) t "A->C" w l ls 1,\
-     '' index 1 using ($4==0?NaN:$4/($2+$3+$4+$5)) t "A->G" w l ls 1,\
-     '' index 1 using ($5==0?NaN:$5/($2+$3+$4+$5)) t "A->T" w l ls 1,\
-     '' index 1 using ($6==0?NaN:$6/($6+$7+$8+$9)) t "C->A" w l ls 1,\
-     '' index 1 using ($8==0?NaN:$8/($6+$7+$8+$9)) t "C->G" w l ls 1,\
-     '' index 1 using ($9==0?NaN:$9/($6+$7+$8+$9)) t "C->T" w l ls 2,\
-     '' index 1 using ($10==0?NaN:$10/($10+$11+$12+$13)) t "G->A" w l ls 3,\
-     '' index 1 using ($11==0?NaN:$11/($10+$11+$12+$13)) t "G->C" w l ls 1,\
-     '' index 1 using ($13==0?NaN:$13/($10+$11+$12+$13)) t "G->T" w l ls 1,\
-     '' index 1 using ($14==0?NaN:$14/($14+$15+$16+$17)) t "T->A" w l ls 1,\
-     '' index 1 using ($15==0?NaN:$15/($14+$15+$16+$17)) t "T->C" w l ls 1,\
-     '' index 1 using ($16==0?NaN:$16/($14+$15+$16+$17)) t "T->G" w l ls 1;
+plot [-1.0:17.0][0:max_damage] datafile index 1 using ($2+$6+$10+$14) axes x1y2 ls 4,\
+     '' index 1 using ($4+$8+$12+$16) axes x1y2 ls 6,\
+     '' index 1 using ($3+$7+$11+$15) axes x1y2 ls 5,\
+     '' index 1 using ($5+$9+$13+$17) axes x1y2 ls 7,\
+     '' index 1 u ($1+2):($3==0?NaN:$3/($3+$7+$11+$15)) t "C->A" w l ls 1,\
+     '' index 1 u ($1+2):($4==0?NaN:$4/($4+$8+$12+$16)) t "G->A" w l ls 3,\
+     '' index 1 u ($1+2):($5==0?NaN:$5/($5+$9+$13+$17)) t "T->A" w l ls 1,\
+     '' index 1 u ($1+2):($6==0?NaN:$6/($2+$6+$10+$14)) t "A->C" w l ls 1,\
+     '' index 1 u ($1+2):($8==0?NaN:$8/($4+$8+$12+$16)) t "G->C" w l ls 1,\
+     '' index 1 u ($1+2):($9==0?NaN:$9/($5+$9+$13+$17)) t "T->C" w l ls 1,\
+     '' index 1 u ($1+2):($10==0?NaN:$10/($2+$6+$10+$14)) t "A->G" w l ls 1,\
+     '' index 1 u ($1+2):($11==0?NaN:$11/($3+$7+$11+$15)) t "C->G" w l ls 1,\
+     '' index 1 u ($1+2):($13==0?NaN:$13/($5+$9+$13+$17)) t "T->G" w l ls 1,\
+     '' index 1 u ($1+2):($14==0?NaN:$14/($2+$6+$10+$14)) t "A->T" w l ls 1,\
+     '' index 1 u ($1+2):($15==0?NaN:$15/($3+$7+$11+$15)) t "C->T" w l ls 2,\
+     '' index 1 u ($1+2):($16==0?NaN:$16/($4+$8+$12+$16)) t "G->T" w l ls 1;

@@ -21,17 +21,32 @@ static unsigned int MERGED_ONLY = 0;
    Returns: A 2D unsigned long matrix with size (REGION_LEN+2) x 16;
             all cells initialized to 0 */
 unsigned long** init_count_mtrx() {
-
     // extra 2 bases upstream/downstream of aln start */
     unsigned long** count_mtrx = malloc( (REGION_LEN+2) * sizeof(unsigned long*) );
     for (int i = 0; i < REGION_LEN+2; i++) {
-        unsigned long* count_arr = malloc( 16 * sizeof(unsigned long) ); // 16 total base substitutions
+        unsigned long* count_arr = malloc( 16 * sizeof(unsigned long) ); // 16 total nuc. combinations
         for (int j = 0; j < 16; j++) {
             count_arr[j] = (unsigned long)0;
         }
         count_mtrx[i] = count_arr;
     }
     return count_mtrx;
+}
+
+
+/* Initialize the forward and reverse rate matrices with 0
+   Returns: A 2D double matrix with size REGION_LEN x 12;
+            all cells initialized to 0 */
+double** init_rate_mtrx() {
+    double** rate_mtrx = malloc( REGION_LEN * sizeof(double*) );
+    for (int i = 0; i < REGION_LEN; i++) {
+        double* rate_arr = malloc( 12 * sizeof(double) ); // 12 different-base substitutions
+        for (int j = 0; j < 12; j++) {
+            rate_arr[j] = (double)0;
+        }
+        rate_mtrx[i] = rate_arr;
+    }
+    return rate_mtrx;
 }
 
 
@@ -479,70 +494,162 @@ int process_aln(unsigned long** fwd_counts, unsigned long** rev_counts, \
 }
 
 
-/* Print count matrices to stdout 
+/* Calculate substitution rates for each different-base substitution (so no AA/CC/GG/TT),
+   using counts from the input count matrix
+   Args: unsigned long** count_mtrx - pointer to count matrix
+         double** rate_mtrx         - pointer to rate matrix where substitution
+                                      rates will be added */
+void find_sub_rates(unsigned long** count_mtrx, double** rate_mtrx) {
+    double n_A = 0, n_C = 0, n_G = 0, n_T = 0;
+    for (int i = 0; i < REGION_LEN; i++) {
+        int ci = i+2; // skip the 2 context rows in count_mtrx
+        n_A = count_mtrx[ci][0] + count_mtrx[ci][4] + count_mtrx[ci][8] + count_mtrx[ci][12];
+        n_C = count_mtrx[ci][1] + count_mtrx[ci][5] + count_mtrx[ci][9] + count_mtrx[ci][13];
+        n_G = count_mtrx[ci][2] + count_mtrx[ci][6] + count_mtrx[ci][10] + count_mtrx[ci][14];
+        n_T = count_mtrx[ci][3] + count_mtrx[ci][7] + count_mtrx[ci][11] + count_mtrx[ci][15];
+        if ( (n_A == 0) || (n_C == 0) || (n_G == 0) || (n_T == 0) ) {
+            continue;
+        }
+        rate_mtrx[i][0] = count_mtrx[ci][1] / n_C;
+        rate_mtrx[i][1] = count_mtrx[ci][2] / n_G;
+        rate_mtrx[i][2] = count_mtrx[ci][3] / n_T;
+        rate_mtrx[i][3] = count_mtrx[ci][4] / n_A;
+        rate_mtrx[i][4] = count_mtrx[ci][6] / n_G;
+        rate_mtrx[i][5] = count_mtrx[ci][7] / n_T;
+        rate_mtrx[i][6] = count_mtrx[ci][8] / n_A;
+        rate_mtrx[i][7] = count_mtrx[ci][9] / n_C;
+        rate_mtrx[i][8] = count_mtrx[ci][11] / n_T;
+        rate_mtrx[i][9] = count_mtrx[ci][12] / n_A;
+        rate_mtrx[i][10] = count_mtrx[ci][13] / n_C;
+        rate_mtrx[i][11] = count_mtrx[ci][14] / n_G;
+    }
+    return;
+}
+
+
+/* Print count matrices to .pss.counts.txt
    Args: const char* fasta_fn - pointer to FASTA filename
-         const char* bam_fn - pointer to BAM filename 
+         const char* bam_fn - pointer to BAM filename
+         const char* out_prefix - pointer to output filename prefix
          unsigned long** fwd_counts - pointer to forward count matrix 
          unsigned long** rev_counts - pointer to reverse count matrix */
-void print_output(const char* fasta_fn, const char* bam_fn, \
-                    unsigned long** fwd_counts, unsigned long** rev_counts) {
-    printf("### pss-bam.c v1.2\n### %s\n### %s\n", fasta_fn, bam_fn);
-    puts("### Format of table:");
-    puts("### Counts of how often a read base and genome base were seen at");
-    puts("### each position in the aligned reads.");
-    puts("### First base is what was seen in the read.");
-    puts("### Second base is what was in the genome at that position.");
-    puts("### POS AA AC AG AT CA CC CG CT GA GC GG GT TA TC TG TT");
-    puts("### Forward read substitution counts and base context");
+int print_counts(const char* fasta_fn, const char* bam_fn, const char* out_prefix, \
+                  unsigned long** fwd_counts, unsigned long** rev_counts) {
+
+    char out_fn[MAX_FN_LEN];
+    snprintf(out_fn, sizeof(out_fn), "%s.pss.counts.txt", out_prefix);
+    FILE *fp = fopen(out_fn, "w");
+    if (!fp) {
+        fprintf( stderr, "ERROR: Cannot write to file %s\n.", out_fn);
+        return 1;
+    }
+
+    fprintf( fp, "### pss-bam.c v1.2.1:\n### FASTA: %s\n### BAM: %s\n### OUT: %s\n", fasta_fn, bam_fn, out_fn );
+    fprintf( fp, "### Format of table:\n" );
+    fprintf( fp, "### Counts of how often a read base and genome base were seen at\n" );
+    fprintf( fp, "### each position in the aligned reads.\n" );
+    fprintf( fp, "### First base is what was seen in the read.\n" );
+    fprintf( fp, "### Second base is what was in the genome at that position.\n" );
+    fprintf( fp, "### POS AA AC AG AT CA CC CG CT GA GC GG GT TA TC TG TT\n" );
+    fprintf( fp, "### Forward read substitution counts and base context\n" );
 
     for (int i = -2; i < REGION_LEN; i++) {
-        printf("%d\t", i);
+        fprintf( fp, "%d\t", i );
         for (int j = 0; j < 16; j++) {
-            printf("%lu\t", fwd_counts[i+2][j]);
+            fprintf( fp, "%lu\t", fwd_counts[i+2][j] );
         }
-        printf("\n");
+        fprintf( fp, "\n" );
     }
-    puts("\n\n### Reverse read substitution counts and base context");
 
+    fprintf( fp, "\n\n### Reverse read substitution counts and base context\n" );
     // print all rows except context rows in rev_counts in reverse order
     for (int i = REGION_LEN-1; i >= 0; i--) {
-        printf("%d\t", i);
+        fprintf( fp, "%d\t", i);
         for (int j = 0; j < 16; j++) {
-            printf( "%lu\t", rev_counts[i+2][j] );
+            fprintf( fp, "%lu\t", rev_counts[i+2][j] );
         }
-        printf( "\n" );
+        fprintf( fp, "\n" );
     }
     
     // print context rows in rev_counts
     for (int i = 1; i < 3; i++) {
-        printf("%d\t", i);
+        fprintf( fp, "%d\t", i );
         for (int j = 0; j < 16; j++) {
-            printf("%lu\t", rev_counts[2-i][j]);
+            fprintf( fp, "%lu\t", rev_counts[2-i][j] );
         }
-        printf( "\n" );
+        fprintf( fp, "\n" );
     }
+    fclose(fp);
+    return 0;
 }
 
 
-/* Free memory allocated by init_count_mtrx() */
-int destroy_count_mtrx(unsigned long** count_mtrx) {
-    if (!count_mtrx) {
+/* Print rate matrices to .pss.rates.txt
+   Args: const char* fasta_fn - pointer to FASTA filename
+         const char* bam_fn - pointer to BAM filename
+         const char* out_prefix - pointer to output filename prefix
+         unsigned long** fwd_rates - pointer to forward rate matrix 
+         unsigned long** rev_rates - pointer to reverse rate matrix */
+int print_rates(const char* fasta_fn, const char* bam_fn, const char* out_prefix, \
+                double** fwd_rates, double** rev_rates) {
+
+    char out_fn[MAX_FN_LEN];
+    snprintf(out_fn, sizeof(out_fn), "%s.pss.rates.txt", out_prefix);
+    FILE *fp = fopen(out_fn, "w");
+    if (!fp) {
+        fprintf( stderr, "ERROR: Cannot write to file %s\n.", out_fn);
+        return 1;
+    }
+
+    fprintf( fp, "### pss-bam.c v1.2\n### FASTA: %s\n### BAM: %s\n### OUT: %s\n", fasta_fn, bam_fn, out_fn );
+    fprintf( fp, "### Format of table:\n" );
+    fprintf( fp, "### Substitution rates for all possible nucleotide substitutions at\n" );
+    fprintf( fp, "### each position in the aligned reads.\n" );
+    fprintf( fp, "### First base is what was seen in the read.\n" );
+    fprintf( fp, "### Second base is what was in the genome at that position.\n" );
+    fprintf( fp, "### POS AC AG AT CA CG CT GA GC GT TA TC TG\n" );
+    fprintf( fp, "### Forward read substitution rates\n" );
+
+    for (int i = 0; i < REGION_LEN; i++) {
+        fprintf( fp, "%d\t", i );
+        for (int j = 0; j < 12; j++) {
+            fprintf( fp, "%.5e\t", fwd_rates[i][j] );
+        }
+        fprintf( fp, "\n" );
+    }
+    
+    fprintf( fp, "\n\n### Reverse read substitution rates\n" );
+    for (int i = REGION_LEN-1; i >= 0; i--) {
+        fprintf( fp, "%d\t", i);
+        for (int j = 0; j < 12; j++) {
+            fprintf( fp, "%.5e\t", rev_rates[i][j] );
+        }
+        fprintf( fp, "\n" );
+    }
+    fclose(fp);
+    return 0;
+}
+
+
+/* Free memory allocated by init_count_mtrx() & init_rate_mtrx() */
+int destroy_mtrx(void** mtrx, size_t n_rows) {
+    if (!mtrx) {
         return 0;
     }
-    for (int i = 0; i < REGION_LEN+2; i++) {
-        free(count_mtrx[i]);
+    for (int i = 0; i < n_rows; i++) {
+        free(mtrx[i]);
     }
-    free(count_mtrx);
+    free(mtrx);
     return 0;
 }
 
 
 /*** MAIN PROGRAM ***/
 int main(int argc, char* argv[]) {
-    
+
     int option;
-    char* opts = ":F:B:R:r:l:L:q:U:D:m";
-    char* fasta_fn, *bam_fn, *ptr1, *ptr2;
+    char* opts = ":F:B:o:R:r:l:L:q:U:D:m";
+    char* fasta_fn, *bam_fn, *out_prefix, *ptr1, *ptr2;
     char* read_group = NULL;
     while ( (option = getopt(argc, argv, opts)) != -1 ) {
         switch (option) {
@@ -551,6 +658,9 @@ int main(int argc, char* argv[]) {
                 break;
             case 'B':
                 bam_fn = strdup(optarg);
+                break;
+            case 'o':
+                out_prefix = strdup(optarg);
                 break;
             case 'r':
                 REGION_LEN = atoi(optarg);
@@ -596,11 +706,12 @@ int main(int argc, char* argv[]) {
             fprintf( stderr, "Non-option argument %s\n", argv[i] );
     }
 
-    if (!fasta_fn || !bam_fn) {
-        fprintf(stderr, "pss-bam: Program for describing base context and counting\n");
+    if ( !fasta_fn || !bam_fn || !out_prefix ) {
+        fprintf(stderr, "pss-bam v1.2.1: Program for describing base context and counting\n");
         fprintf(stderr, "the number of matches/mismatches in aligned reads to a genome.\n" );
         fprintf(stderr, "-F <reference FASTA (required)>\n");
         fprintf(stderr, "-B <input BAM (required)>\n");
+        fprintf(stderr, "-o <output filename prefix (required)>\n");
         fprintf(stderr, "-r <length in basepairs into the interior of alignments to report on (default: 15)>\n");
         fprintf(stderr, "-l <minimum length of read to report (default: 0)>\n");
         fprintf(stderr, "-L <maximum length of read to report (default: 250000000)>\n");
@@ -614,23 +725,25 @@ int main(int argc, char* argv[]) {
 
     if (MERGED_ONLY && read_group) {
         fprintf( stderr,
-                 "Full command: %s -F %s -B %s -r %d -l %lu -L %lu -q %d -R %s -U %s -D %s -m\n", 
-                 argv[0], fasta_fn, bam_fn, REGION_LEN, MIN_READ_LEN, MAX_READ_LEN, MIN_MQ, read_group, UP_CTX, DOWN_CTX);
+                 "Full command: %s -F %s -B %s -o %s -r %d -l %lu -L %lu -q %d -R %s -U %s -D %s -m\n", 
+                  argv[0], fasta_fn, bam_fn, out_prefix, REGION_LEN, MIN_READ_LEN, MAX_READ_LEN, 
+                  MIN_MQ, read_group, UP_CTX, DOWN_CTX);
     }
     else if (MERGED_ONLY) {
         fprintf( stderr,
-                 "Full command: %s -F %s -B %s -r %d -l %lu -L %lu -q %d -U %s -D %s -m\n", 
-                 argv[0], fasta_fn, bam_fn, REGION_LEN, MIN_READ_LEN, MAX_READ_LEN, MIN_MQ, UP_CTX, DOWN_CTX);
+                 "Full command: %s -F %s -B %s -o %s -r %d -l %lu -L %lu -q %d -U %s -D %s -m\n", 
+                 argv[0], fasta_fn, bam_fn, out_prefix, REGION_LEN, MIN_READ_LEN, MAX_READ_LEN, MIN_MQ, UP_CTX, DOWN_CTX);
     }
     else if (read_group) {
         fprintf( stderr,
-                 "Full command: %s -F %s -B %s -r %d -l %lu -L %lu -q %d -R %s -U %s -D %s\n", 
-                 argv[0], fasta_fn, bam_fn, REGION_LEN, MIN_READ_LEN, MAX_READ_LEN, MIN_MQ, read_group, UP_CTX, DOWN_CTX);
+                 "Full command: %s -F %s -B %s -o %s -r %d -l %lu -L %lu -q %d -R %s -U %s -D %s\n", 
+                 argv[0], fasta_fn, bam_fn, out_prefix, REGION_LEN, MIN_READ_LEN, MAX_READ_LEN, 
+                 MIN_MQ, read_group, UP_CTX, DOWN_CTX);
     }
     else {
         fprintf( stderr,
-                 "Full command: %s -F %s -B %s -r %d -l %lu -L %lu -q %d -U %s -D %s\n", 
-                 argv[0], fasta_fn, bam_fn, REGION_LEN, MIN_READ_LEN, MAX_READ_LEN, MIN_MQ, UP_CTX, DOWN_CTX);
+                 "Full command: %s -F %s -B %s -o %s -r %d -l %lu -L %lu -q %d -U %s -D %s\n", 
+                 argv[0], fasta_fn, bam_fn, out_prefix, REGION_LEN, MIN_READ_LEN, MAX_READ_LEN, MIN_MQ, UP_CTX, DOWN_CTX);
     }
 
     fprintf( stderr, "Reading genome sequence from:\n%s\n", fasta_fn);
@@ -639,6 +752,8 @@ int main(int argc, char* argv[]) {
     
     unsigned long** fwd_counts = init_count_mtrx();
     unsigned long** rev_counts = init_count_mtrx();
+    double** fwd_rates = init_rate_mtrx();
+    double** rev_rates = init_rate_mtrx();
 
     FILE* sam_out = bam_to_sam(bam_fn, read_group);
     char saml_buf[MAX_LINE_LEN + 1];
@@ -662,17 +777,24 @@ int main(int argc, char* argv[]) {
             fprintf( stderr, "%s: Alignment did not pass filters.\n", sp->qname );
         }
     }
+    find_sub_rates(fwd_counts, fwd_rates);
+    find_sub_rates(rev_counts, rev_rates);
 
-    print_output(fasta_fn, bam_fn, fwd_counts, rev_counts);
+    print_counts(fasta_fn, bam_fn, out_prefix, fwd_counts, rev_counts);
+    print_rates(fasta_fn, bam_fn, out_prefix, fwd_rates, rev_rates);
     
     free(fasta_fn);
     free(bam_fn);
+    free(out_prefix);
+    free(read_group);
     free(sp);
     fclose(sam_out);
     
     destroy_genome(genome);
-    destroy_count_mtrx(fwd_counts);
-    destroy_count_mtrx(rev_counts);
+    destroy_mtrx( (void**)fwd_counts, REGION_LEN+2 );
+    destroy_mtrx( (void**)rev_counts, REGION_LEN+2 );
+    destroy_mtrx( (void**)fwd_rates, REGION_LEN );
+    destroy_mtrx( (void**)rev_rates, REGION_LEN );
 
     fprintf(stderr, "Done.\n");
     return 0;
