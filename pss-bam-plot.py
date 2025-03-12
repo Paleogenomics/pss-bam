@@ -25,16 +25,17 @@ def load_args():
     '''Retrieves command line arguments'''
     desc = "pss-bam-plot.py: Create DNA damage plot (nucleotide composition & substitution) from pss-bam's output"
     parser = argparse.ArgumentParser(description=desc)
-    parser.add_argument("-p", "--prefix", action="store", dest="input", required=True, metavar="STR", help=".pss.counts.txt and .pss.rates.txt file prefix (same as given to -o argument in pss-bam), output plot will also have this prefix")
-    parser.add_argument("-r", "--region-length", action="store", dest="length", default=15, type=int, metavar="INT", help="length in basepairs into the interior of alignments to report (same as given to -r argument in pss-bam; default=15)")
+    parser.add_argument("-c", "--counts", action="store", dest="counts", required=True, metavar="STR", help="input .pss.counts.txt file")
+    parser.add_argument("-r", "--rates", action="store", dest="rates", required=True, metavar="STR", help="input .pss.rates.txt file")
+    parser.add_argument("-o", "--out-prefix", action="store", dest="out", required=True, metavar="STR", help="output file prefix")
+    parser.add_argument("-l", "--region-length", action="store", dest="length", default=15, type=int, metavar="INT", help="length in basepairs into the interior of alignments to report (must match value provided to -r argument in pss-bam; default=15)")
     parser.add_argument("-m", "--max-rate", action="store", dest="rate", default=0.1, type=float, metavar="FLOAT", help="maximum substitution rate to set for y axis (default=0.1)")
     args = parser.parse_args()
     return args
 
 
-def get_counts(in_prefix, region_len):
-    fn = in_prefix + ".pss.counts.txt"
-    f = open(fn, "r")
+def get_counts(counts_fn, region_len):
+    f = open(counts_fn, "r")
     n_skip = 0
     line = f.readline()
     while line and not line.startswith("### Reverse"):
@@ -42,8 +43,8 @@ def get_counts(in_prefix, region_len):
         line = f.readline()
     n_skip += 1
     
-    fp_df = pd.read_table(fn, sep="\s+", comment="#", names=nt_pairs, nrows=region_len+2)
-    tp_df = pd.read_table(fn, sep="\s+", skiprows=n_skip, names=nt_pairs, nrows=region_len+2)
+    fp_df = pd.read_table(counts_fn, sep="\s+", comment="#", names=nt_pairs, nrows=region_len+2)
+    tp_df = pd.read_table(counts_fn, sep="\s+", skiprows=n_skip, names=nt_pairs, nrows=region_len+2)
     tp_df.index = np.arange(region_len-1, -3, -1)
     for df in [fp_df, tp_df]:
         df["A"] = df["AA"] + df["AC"] + df["AG"] + df["AT"]
@@ -54,9 +55,8 @@ def get_counts(in_prefix, region_len):
     return fp_df, tp_df
 
 
-def get_rates(in_prefix, region_len):
-    fn = in_prefix + ".pss.rates.txt"
-    f = open(fn, "r")
+def get_rates(rates_fn, region_len):
+    f = open(rates_fn, "r")
     n_skip = 0
     line = f.readline()
     while line and not line.startswith("### Reverse"):
@@ -64,14 +64,14 @@ def get_rates(in_prefix, region_len):
         line = f.readline()
     n_skip += 1
     
-    fp_df = pd.read_table(fn, sep="\s+", comment="#", names=sub_pairs, nrows=region_len, dtype=float)
-    tp_df = pd.read_table(fn, sep="\s+", skiprows=n_skip, names=sub_pairs, nrows=region_len, dtype=float)
+    fp_df = pd.read_table(rates_fn, sep="\s+", comment="#", names=sub_pairs, nrows=region_len, dtype=float)
+    tp_df = pd.read_table(rates_fn, sep="\s+", skiprows=n_skip, names=sub_pairs, nrows=region_len, dtype=float)
     tp_df.index = np.arange(region_len-1, -1, -1)
     f.close()
     return fp_df, tp_df
 
 
-def make_plot(fp_counts, tp_counts, fp_rates, tp_rates, in_prefix, region_len, max_rate):
+def make_plot(fp_counts, tp_counts, fp_rates, tp_rates, out_prefix, region_len, max_rate):
     fig, (ax1, ax2) = plt.subplots(nrows=1, ncols=2, figsize=(12, 8))
     plt.subplots_adjust(wspace=0.15)
     
@@ -115,21 +115,23 @@ def make_plot(fp_counts, tp_counts, fp_rates, tp_rates, in_prefix, region_len, m
         patch = mpatches.Patch(color=color_dict[b], label=b)
         legend_handles.append(patch)
     
-    plt.legend(handles=legend_handles, bbox_to_anchor=(0.95,-0.05), ncol=8, frameon=False, fontsize=18)
+    plt.legend(handles=legend_handles, bbox_to_anchor=(1.18,-0.05), ncol=8, frameon=False, fontsize=18)
     
-    out_fn = in_prefix + ".pss.plot.svg"
+    out_fn = out_prefix + ".pss.plot.svg"
     plt.savefig(fname=out_fn, format="svg", dpi=500)
     return None
 
 
 def main():
     args = load_args()
-    in_prefix = args.input
+    counts_fn = args.counts
+    rates_fn = args.rates
+    out_prefix = args.out
     region_len = args.length
     max_rate = args.rate
-    fp_counts, tp_counts = get_counts(in_prefix, region_len)
-    fp_rates, tp_rates = get_rates(in_prefix, region_len)
-    make_plot(fp_counts, tp_counts, fp_rates, tp_rates, in_prefix, region_len, max_rate)
+    fp_counts, tp_counts = get_counts(counts_fn, region_len)
+    fp_rates, tp_rates = get_rates(rates_fn, region_len)
+    make_plot(fp_counts, tp_counts, fp_rates, tp_rates, out_prefix, region_len, max_rate)
 
 
 if __name__ == "__main__":
