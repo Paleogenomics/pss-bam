@@ -24,10 +24,9 @@ int line2saml( const char* line, Saml* sp ) {
                platform/vendor quality controls
      1024 0x400 PCR or optical duplicate
      2048 0x800 supplementary alignment */
-  size_t pos, len;
+  size_t pos, len, fields;
   char tag[ 3 ];
   char type;
-  int field = 0;
   int end_of_samline = 0; // set to true once we've parsed it all
   int got_AS = 0;
   int got_XM = 0;
@@ -35,7 +34,7 @@ int line2saml( const char* line, Saml* sp ) {
   int got_XG = 0;
   char value[ MAX_FIELD_WIDTH ];
   if ( sscanf( line,
-	       "%s\t%u\t%s\t%lu\t%u\t%s\t%s\t%u\t%i\t%s\t%s\t%s",
+	       "%s\t%u\t%s\t%lu\t%u\t%s\t%s\t%u\t%i\t%s\t%s",
 	       sp->qname,
 	       &sp->flag,
 	       sp->rname,
@@ -46,8 +45,7 @@ int line2saml( const char* line, Saml* sp ) {
 	       &sp->mpos,
 	       &sp->isize,
 	       sp->seq,
-	       sp->qual,
-	       sp->tags ) >= 11 ) {
+	       sp->qual) >= 11 ) {
 
     if ( strlen( sp->seq ) == strlen( sp->qual ) ) {
       sp->seq_len = strlen( sp->seq );
@@ -71,12 +69,13 @@ int line2saml( const char* line, Saml* sp ) {
       
       len = strlen( line );
       pos = 0;
+      fields = 0;
       /* Advance pos to first position past mandatory fields
 	 This is either the end of the line or the beginning
 	 of the optional field */
-      while( field < 11 ) {
+      while( (fields < 11) && (pos < len) ) {
         if ( line[pos] == '\t' ) {
-          field++;
+          fields++;
         }
         pos++;
       }

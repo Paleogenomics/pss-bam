@@ -7,6 +7,7 @@
 #include "sam-parse.h"
 
 #define DEBUG (0)
+#define VERSION ("1.2.1")
 
 static int REGION_LEN = 15;
 static unsigned long MIN_READ_LEN = 0;
@@ -366,6 +367,7 @@ void add_counts_from_seq(unsigned long** fwd_counts, unsigned long** rev_counts,
          int len - length of substring */
 void get_substring(const char* str, char* substr, size_t start, int len) {
     strncpy(substr, str+start, len);
+    substr[len] = '\0';
 }
 
 
@@ -601,7 +603,7 @@ int print_rates(const char* fasta_fn, const char* bam_fn, const char* out_prefix
         return 1;
     }
 
-    fprintf( fp, "### pss-bam.c v1.2\n### FASTA: %s\n### BAM: %s\n### OUT: %s\n", fasta_fn, bam_fn, out_fn );
+    fprintf( fp, "### pss-bam.c v%s\n### FASTA: %s\n### BAM: %s\n### OUT: %s\n", VERSION, fasta_fn, bam_fn, out_fn );
     fprintf( fp, "### Format of table:\n" );
     fprintf( fp, "### Substitution rates for all possible nucleotide substitutions at\n" );
     fprintf( fp, "### each position in the aligned reads.\n" );
@@ -761,8 +763,10 @@ int main(int argc, char* argv[]) {
      
     while ( fgets(saml_buf, MAX_LINE_LEN + 1, sam_out) ) {
         int parse_status = line2saml(saml_buf, sp);
-        if (parse_status && DEBUG) {
-            fprintf( stderr, "Problem parsing alignment, continuing to next entry...\n" );
+        if (parse_status) {
+            if (DEBUG) {
+                fprintf( stderr, "Problem parsing alignment, continuing to next entry...\n" );
+            }
             continue;
         }
 
